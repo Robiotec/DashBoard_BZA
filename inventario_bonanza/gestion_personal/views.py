@@ -1750,6 +1750,40 @@ def dashboard_rrhh(request):
     total_personas = personal_counts['total']
     total_activos = personal_counts['activos']
     total_pasivos = personal_counts['pasivos']
+
+    month_names = [
+        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
+        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
+    ]
+    birthday_months = [
+        {"number": index + 1, "name": name, "people": []}
+        for index, name in enumerate(month_names)
+    ]
+    birthday_people = (
+        personal_qs
+        .filter(estado='activo')
+        .exclude(birth_date__isnull=True)
+        .only('first_name', 'last_name', 'birth_date', 'area')
+        .order_by('birth_date__month', 'birth_date__day', 'last_name', 'first_name')
+    )
+    for person in birthday_people:
+        area = (person.area or '').strip()
+        area_normalized = area.lower()
+        if 'molino' in area_normalized:
+            area_class = 'birthday-person-molino'
+            area_label = 'Molino'
+        elif 'mina' in area_normalized:
+            area_class = 'birthday-person-mina'
+            area_label = 'Mina'
+        else:
+            area_class = 'birthday-person-other'
+            area_label = area or 'Sin area'
+        birthday_months[person.birth_date.month - 1]["people"].append({
+            "name": f"{person.first_name} {person.last_name}",
+            "day": person.birth_date.day,
+            "area": area_label,
+            "area_class": area_class,
+        })
     
     # Permisos y vacaciones activos
     personas_org = personal_qs
@@ -1841,6 +1875,7 @@ def dashboard_rrhh(request):
         'total_personas': total_personas,
         'total_activos': total_activos,
         'total_pasivos': total_pasivos,
+        'birthday_months': birthday_months,
         'permisos_activos': permisos_activos,
         'permisos_activos_count': permisos_activos_count,
         'vacaciones_actuales_count': vacaciones_actuales_count,

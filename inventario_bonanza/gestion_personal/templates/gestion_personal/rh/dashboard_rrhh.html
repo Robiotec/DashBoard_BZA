@@ -5,6 +5,78 @@
 {% block title %}Dashboard Recursos Humanos{% endblock %}
 
 {% block content %}
+<style>
+  .birthday-board .month-card {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    min-height: 190px;
+  }
+
+  .birthday-board .month-title {
+    font-size: 0.95rem;
+    font-weight: 700;
+  }
+
+  .birthday-board .birthday-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+
+  .birthday-board .birthday-person {
+    border-left: 4px solid #6c757d;
+    background: #f8f9fa;
+    border-radius: 4px;
+    padding: 0.45rem 0.55rem;
+    line-height: 1.2;
+  }
+
+  .birthday-board .birthday-person-mina {
+    border-left-color: #0d6efd;
+    color: #084298;
+  }
+
+  .birthday-board .birthday-person-molino {
+    border-left-color: #198754;
+    color: #0f5132;
+  }
+
+  .birthday-board .birthday-person-other {
+    border-left-color: #6c757d;
+    color: #495057;
+  }
+
+  .birthday-board .birthday-day {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.75rem;
+    height: 1.75rem;
+    margin-right: 0.4rem;
+    border-radius: 50%;
+    background: #fff;
+    color: #212529;
+    font-size: 0.8rem;
+    font-weight: 700;
+  }
+
+  .birthday-board .area-dot {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 50%;
+    margin-right: 0.3rem;
+  }
+
+  .birthday-board .area-dot-mina {
+    background: #0d6efd;
+  }
+
+  .birthday-board .area-dot-molino {
+    background: #198754;
+  }
+</style>
+
 <div class="container-fluid">
   <h1 class="mb-4">
     <i class="fas fa-chart-line me-2"></i>Panel de Recursos Humanos
@@ -67,6 +139,41 @@
           <h5 class="card-title"><i class="fas fa-clipboard-check me-2"></i>Asistencia Hoy</h5>
           <h2>{{ asistencias_hoy|default:"0" }}</h2>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Cumpleañeros por mes -->
+  <div class="card shadow-sm mb-4 birthday-board">
+    <div class="card-header bg-light d-flex flex-wrap align-items-center justify-content-between gap-2">
+      <h5 class="mb-0"><i class="fas fa-cake-candles me-2"></i>Cumpleañeros por mes</h5>
+      <div class="small text-muted">
+        <span class="me-3"><span class="area-dot area-dot-mina"></span>Mina</span>
+        <span><span class="area-dot area-dot-molino"></span>Molino</span>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        {% for month in birthday_months %}
+          <div class="col-12 col-sm-6 col-lg-4 col-xl-3">
+            <div class="month-card p-3 h-100">
+              <div class="month-title mb-3">{{ month.name }}</div>
+              {% if month.people %}
+                <div class="birthday-list">
+                  {% for person in month.people %}
+                    <div class="birthday-person {{ person.area_class }}">
+                      <span class="birthday-day">{{ person.day }}</span>
+                      <strong>{{ person.name }}</strong>
+                      <div class="small text-muted ms-5">{{ person.area }}</div>
+                    </div>
+                  {% endfor %}
+                </div>
+              {% else %}
+                <div class="text-muted small">Sin cumpleaños registrados</div>
+              {% endif %}
+            </div>
+          </div>
+        {% endfor %}
       </div>
     </div>
   </div>
