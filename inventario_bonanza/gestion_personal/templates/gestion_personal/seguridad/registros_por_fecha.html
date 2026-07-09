@@ -1,0 +1,473 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Registros por Fecha - Seguridad Física{% endblock %}
+
+{% block extra_css %}
+<style>
+  .filter-box {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+  }
+  .card-header-tabs {
+    margin-right: -1rem;
+    margin-bottom: -0.5rem;
+    margin-left: -1rem;
+    border-bottom: 0;
+  }
+  .nav-link.active {
+    font-weight: bold;
+  }
+  .table-container {
+    overflow-x: auto;
+  }
+  .data-table {
+    font-size: 0.9rem;
+  }
+  .data-table th, .data-table td {
+    padding: 0.5rem 0.75rem;
+  }
+  .badge-large {
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .export-btn {
+    background-color: #20c997;
+    border-color: #20c997;
+  }
+  .export-btn:hover {
+    background-color: #1ba87e;
+    border-color: #1ba87e;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-calendar-alt me-2"></i>Registros por Fecha
+  </h1>
+  <div>
+    <a href="{% url 'dashboard_seguridad' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-1"></i>Volver
+    </a>
+    <button type="button" class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#modalVisitante">
+      <i class="fas fa-user-plus me-1"></i>Nuevo Visitante
+    </button>
+  </div>
+</div>
+
+<!-- Filtro de fecha -->
+<div class="filter-box shadow-sm">
+  <form method="get" action="{% url 'registros_por_fecha' %}">
+    <div class="row align-items-end">
+      <div class="col-md-4">
+        <label for="fecha" class="form-label">Seleccionar fecha</label>
+        <input type="date" name="fecha" id="fecha" class="form-control" value="{{ fecha }}">
+      </div>
+      <div class="col-md-4">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="fas fa-filter me-1"></i>Ver registros
+        </button>
+      </div>
+      <div class="col-md-4">
+        <a href="{% url 'export_attendance' %}?start_date={{ fecha }}&end_date={{ fecha }}" class="btn export-btn text-white w-100">
+          <i class="fas fa-file-excel me-1"></i>Exportar a Excel
+        </a>
+      </div>
+    </div>
+  </form>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+  <div class="col-md-3 mb-3">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Ingresos</h6>
+            <h2 class="mb-0">**{{ registros_personal|length }}**</h2>
+          </div>
+          <i class="fas fa-sign-in-alt fa-2x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3 mb-3">
+    <div class="card bg-danger text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Salidas</h6>
+            <h2 class="mb-0">**{{ total_registros }}**</h2>
+          </div>
+          <i class="fas fa-sign-out-alt fa-2x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3 mb-3">
+    <div class="card bg-info text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Visitantes</h6>
+            <h2 class="mb-0">{{ registros_visitantes.count }}</h2>
+          </div>
+          <i class="fas fa-user-friends fa-2x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3 mb-3">
+    <div class="card bg-warning text-dark">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Vehículos</h6>
+            <h2 class="mb-0">{{ registros_vehiculos.count }}</h2>
+          </div>
+          <i class="fas fa-truck fa-2x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if registros_limited %}
+<div class="alert alert-warning">
+  Se muestran hasta {{ registros_limit }} registros por sección. Use la fecha para acotar resultados.
+</div>
+{% endif %}
+
+<!-- Tabs con registros -->
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-light pb-0">
+    <ul class="nav nav-tabs card-header-tabs" id="registrosTab" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="todos-tab" data-bs-toggle="tab" data-bs-target="#todos" type="button" role="tab">
+          <i class="fas fa-list me-1"></i>Todos
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="entradas-tab" data-bs-toggle="tab" data-bs-target="#entradas" type="button" role="tab">
+          <i class="fas fa-sign-in-alt me-1"></i>Entradas
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="salidas-tab" data-bs-toggle="tab" data-bs-target="#salidas" type="button" role="tab">
+          <i class="fas fa-sign-out-alt me-1"></i>Salidas
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="visitantes-tab" data-bs-toggle="tab" data-bs-target="#visitantes" type="button" role="tab">
+          <i class="fas fa-user-friends me-1"></i>Visitantes
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="vehiculos-tab" data-bs-toggle="tab" data-bs-target="#vehiculos" type="button" role="tab">
+          <i class="fas fa-truck me-1"></i>Vehículos
+        </button>
+      </li>
+    </ul>
+  </div>
+  <div class="card-body p-0">
+    <div class="tab-content" id="registrosTabContent">
+      <!-- Todos los registros -->
+      <div class="tab-pane fade show active" id="todos" role="tabpanel">
+        <div class="table-container">
+          <table class="table table-hover data-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Hora</th>
+                <th>Tipo</th>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <th>Motivo</th>
+                <th>Área</th>
+                <th>Registrado por</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for registro in registros_personal %}
+              <tr class="{% if registro.record_type == 'entrada' %}table-success{% else %}table-danger{% endif %}">
+                <td>{{ registro.timestamp|time:"H:i" }}</td>
+                <td>
+                  <span class="badge {% if registro.record_type == 'entrada' %}bg-success{% else %}bg-danger{% endif %}">
+                    {{ registro.get_record_type_display }}
+                  </span>
+                </td>
+                <td>{{ registro.person.id_number }}</td>
+                <td>{{ registro.person.first_name }} {{ registro.person.last_name }}</td>
+                <td>
+                  {% if registro.reason %}
+                    {{ registro.get_reason_display }}
+                  {% else %}
+                    {{ registro.motivo|default:"---" }}
+                  {% endif %}
+                </td>
+                <td>{{ registro.person.area|default:"---" }}</td>
+                <td>{{ registro.recorded_by.username }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="7" class="text-center py-4">No hay registros para esta fecha</td>
+              </tr>
+              {% endfor %}
+              
+              <!-- Incluir visitantes en la lista general -->
+              {% for visitante in registros_visitantes %}
+              <tr class="table-info">
+                <td>{{ visitante.fecha|time:"H:i" }}</td>
+                <td>
+                  <span class="badge bg-info text-white">Visitante</span>
+                </td>
+                <td>{{ visitante.cedula }}</td>
+                <td>{{ visitante.nombre }}</td>
+                <td>Visita</td>
+                <td>{{ visitante.area_visita }}</td>
+                <td>{{ visitante.autorizado_por }}</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Entradas -->
+      <div class="tab-pane fade" id="entradas" role="tabpanel">
+        <div class="table-container">
+          <table class="table table-hover data-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Hora</th>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <th>Motivo</th>
+                <th>Área</th>
+                <th>Departamento</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for registro in registros_personal %}
+              {% if registro.record_type == 'entrada' %}
+              <tr>
+                <td>{{ registro.timestamp|time:"H:i" }}</td>
+                <td>{{ registro.person.id_number }}</td>
+                <td>{{ registro.person.first_name }} {{ registro.person.last_name }}</td>
+                <td>
+                  {% if registro.reason %}
+                    {{ registro.get_reason_display }}
+                  {% else %}
+                    {{ registro.motivo|default:"---" }}
+                  {% endif %}
+                </td>
+                <td>{{ registro.person.area|default:"---" }}</td>
+                <td>{{ registro.person.departamento|default:"---" }}</td>
+              </tr>
+              {% endif %}
+              {% empty %}
+              <tr>
+                <td colspan="6" class="text-center py-4">No hay registros de entradas para esta fecha</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Salidas -->
+      <div class="tab-pane fade" id="salidas" role="tabpanel">
+        <div class="table-container">
+          <table class="table table-hover data-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Hora</th>
+                <th>Cédula</th>
+                <th>Nombre</th>
+                <th>Motivo</th>
+                <th>Destino</th>
+                <th>Área</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for registro in registros_personal %}
+              {% if registro.record_type == 'salida' %}
+              <tr>
+                <td>{{ registro.timestamp|time:"H:i" }}</td>
+                <td>{{ registro.person.id_number }}</td>
+                <td>{{ registro.person.first_name }} {{ registro.person.last_name }}</td>
+                <td>
+                  {% if registro.reason %}
+                    {{ registro.get_reason_display }}
+                  {% else %}
+                    {{ registro.motivo|default:"---" }}
+                  {% endif %}
+                </td>
+                <td>{{ registro.campamento_destino|default:"---" }}</td>
+                <td>{{ registro.person.area|default:"---" }}</td>
+              </tr>
+              {% endif %}
+              {% empty %}
+              <tr>
+                <td colspan="6" class="text-center py-4">No hay registros de salidas para esta fecha</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Visitantes -->
+      <div class="tab-pane fade" id="visitantes" role="tabpanel">
+        <div class="table-container">
+          <table class="table table-hover data-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Hora</th>
+                <th>Nombre</th>
+                <th>Cédula</th>
+                <th>Área de Visita</th>
+                <th>Autorizado por</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for visitante in registros_visitantes %}
+              <tr>
+                <td>{{ visitante.fecha|time:"H:i" }}</td>
+                <td>{{ visitante.nombre }}</td>
+                <td>{{ visitante.cedula }}</td>
+                <td>{{ visitante.area_visita }}</td>
+                <td>{{ visitante.autorizado_por }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center py-4">No hay visitantes registrados para esta fecha</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      <!-- Vehículos -->
+      <div class="tab-pane fade" id="vehiculos" role="tabpanel">
+        <div class="table-container">
+          <table class="table table-hover data-table mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Placa</th>
+                <th>Modelo</th>
+                <th>Chofer</th>
+                <th>Hora Ingreso</th>
+                <th>Hora Salida</th>
+                <th>Estado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for vehiculo in registros_vehiculos %}
+              <tr>
+                <td>{{ vehiculo.placa }}</td>
+                <td>{{ vehiculo.marca|default:"---" }} {{ vehiculo.modelo|default:"" }}</td>
+                <td>{{ vehiculo.chofer.first_name }} {{ vehiculo.chofer.last_name }}</td>
+                <td>{{ vehiculo.fecha_ingreso|time:"H:i" }}</td>
+                <td>
+                  {% if vehiculo.fecha_salida %}
+                    {{ vehiculo.fecha_salida|time:"H:i" }}
+                  {% else %}
+                    ---
+                  {% endif %}
+                </td>
+                <td>
+                  {% if not vehiculo.fecha_salida %}
+                    <span class="badge bg-success">En instalaciones</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Salió</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="6" class="text-center py-4">No hay vehículos registrados para esta fecha</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Nuevo Visitante -->
+<div class="modal fade" id="modalVisitante" tabindex="-1" aria-labelledby="modalVisitanteLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title" id="modalVisitanteLabel">
+          <i class="fas fa-user-plus me-2"></i>Nuevo Visitante
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post" action="{% url 'visitor_create_seguridad' %}">
+          {% csrf_token %}
+          <input type="hidden" name="redirect_url" value="{% url 'registros_por_fecha' %}?fecha={{ fecha }}">
+          
+          <div class="mb-3">
+            <label for="id_nombre" class="form-label">Nombre completo</label>
+            <input type="text" name="nombre" id="id_nombre" class="form-control" required>
+          </div>
+          
+          <div class="mb-3">
+            <label for="id_cedula" class="form-label">Cédula</label>
+            <input type="text" name="cedula" id="id_cedula" class="form-control" required>
+          </div>
+          
+          <div class="mb-3">
+            <label for="id_area_visita" class="form-label">Área a visitar</label>
+            <input type="text" name="area_visita" id="id_area_visita" class="form-control" required>
+          </div>
+          
+          <div class="mb-3">
+            <label for="id_autorizado_por" class="form-label">Autorizado por</label>
+            <input type="text" name="autorizado_por" id="id_autorizado_por" class="form-control" required>
+          </div>
+          
+          <div class="d-grid">
+            <button type="submit" class="btn btn-info text-white">
+              <i class="fas fa-save me-1"></i>Registrar Visitante
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Establecer fecha actual si no hay fecha seleccionada
+    const fechaInput = document.getElementById('fecha');
+    if (!fechaInput.value) {
+      const hoy = new Date().toISOString().split('T')[0];
+      fechaInput.value = hoy;
+    }
+    
+    // Activar tooltips
+    const tooltips = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+    tooltips.forEach(tooltip => {
+      new bootstrap.Tooltip(tooltip);
+    });
+  });
+</script>
+{% endblock %}

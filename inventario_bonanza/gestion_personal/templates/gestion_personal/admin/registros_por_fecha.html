@@ -1,0 +1,229 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+
+{% block title %}Registros por Fecha{% endblock %}
+
+{% block extra_css %}
+<style>
+  .filter-card {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+    margin-bottom: 20px;
+  }
+  .badge-tipo {
+    min-width: 80px;
+  }
+  .table-container {
+    min-height: 400px;
+  }
+  .export-btn {
+    transition: all 0.3s ease;
+  }
+  .export-btn:hover {
+    transform: translateY(-2px);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-calendar-alt me-2"></i>Registros por Fecha
+  </h1>
+  <div>
+    <button class="btn btn-success export-btn" onclick="exportarExcel()">
+      <i class="fas fa-file-excel me-1"></i>Exportar a Excel
+    </button>
+    <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary ms-2">
+      <i class="fas fa-arrow-left me-1"></i>Volver
+    </a>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card filter-card">
+  <div class="card-body">
+    <form method="get" action="{% url 'registros_por_fecha' %}">
+      <div class="row">
+        <div class="col-md-4 mb-2">
+            <label for="fecha_inicio" class="form-label">Fecha Inicial:</label>
+            <input type="date" id="fecha_inicio" name="fecha_inicio" class="form-control" value="{{ fecha_inicio }}">
+          </div>
+          
+          <div class="col-md-4 mb-2">
+            <label for="fecha_fin" class="form-label">Fecha Final:</label>
+            <input type="date" id="fecha_fin" name="fecha_fin" class="form-control" value="{{ fecha_fin }}">
+          </div>
+          
+          <div class="col-md-4 mb-2 d-flex align-items-end">
+            <div class="d-grid gap-2 w-100">
+              <button type="submit" class="btn btn-primary">
+                <i class="fas fa-filter me-1"></i>Filtrar
+              </button>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+   </div>
+   
+   <!-- Estadísticas -->
+   <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card bg-primary text-white">
+        <div class="card-body text-center">
+          <h6 class="text-uppercase">Total Registros</h6>
+          <h3 class="mb-0">{{ registros.count }}</h3>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-success text-white">
+        <div class="card-body text-center">
+          <h6 class="text-uppercase">Entradas</h6>
+          <h3 class="mb-0">{{ registros|dictsortreversed:"record_type"|first|length }}</h3>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-danger text-white">
+        <div class="card-body text-center">
+          <h6 class="text-uppercase">Salidas</h6>
+          <h3 class="mb-0">{{ registros|dictsort:"record_type"|first|length }}</h3>
+        </div>
+      </div>
+    </div>
+    
+    <div class="col-md-3">
+      <div class="card bg-info text-white">
+        <div class="card-body text-center">
+          <h6 class="text-uppercase">Visitantes</h6>
+          <h3 class="mb-0">{{ visitantes.count }}</h3>
+        </div>
+      </div>
+    </div>
+   </div>
+   
+   <!-- Tabla de Registros -->
+   <div class="card mb-4">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0"><i class="fas fa-clipboard-list me-2"></i>Registros de Personal</h5>
+    </div>
+    <div class="card-body p-0 table-container">
+      {% if registros %}
+      <div class="table-responsive">
+        <table class="table table-hover table-striped mb-0" id="tablaRegistros">
+          <thead class="table-light">
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Persona</th>
+              <th>Identificación</th>
+              <th>Área</th>
+              <th>Tipo</th>
+              <th>Motivo</th>
+              <th>Registrado por</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for r in registros %}
+            <tr>
+              <td>{{ r.timestamp|date:"d/m/Y" }}</td>
+              <td>{{ r.timestamp|time:"H:i:s" }}</td>
+              <td>{{ r.person.first_name }} {{ r.person.last_name }}</td>
+              <td>{{ r.person.id_number }}</td>
+              <td>{{ r.person.area|default:"---" }}</td>
+              <td>
+                <span class="badge badge-tipo {% if r.record_type == 'entrada' %}bg-success{% else %}bg-danger{% endif %}">
+                  {{ r.get_record_type_display }}
+                </span>
+              </td>
+              <td>{{ r.motivo|default:"---" }}</td>
+              <td>{{ r.recorded_by.username }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-clipboard fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted">No se encontraron registros para este período</h5>
+      </div>
+      {% endif %}
+    </div>
+   </div>
+   
+   <!-- Tabla de Visitantes -->
+   <div class="card mb-4">
+    <div class="card-header bg-info text-white">
+      <h5 class="mb-0"><i class="fas fa-user-friends me-2"></i>Registro de Visitantes</h5>
+    </div>
+    <div class="card-body p-0 table-container">
+      {% if visitantes %}
+      <div class="table-responsive">
+        <table class="table table-hover table-striped mb-0" id="tablaVisitantes">
+          <thead class="table-light">
+            <tr>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Nombre</th>
+              <th>Cédula</th>
+              <th>Área de visita</th>
+              <th>Autorizado por</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for v in visitantes %}
+            <tr>
+              <td>{{ v.fecha|date:"d/m/Y" }}</td>
+              <td>{{ v.fecha|time:"H:i:s" }}</td>
+              <td>{{ v.nombre }}</td>
+              <td>{{ v.cedula }}</td>
+              <td>{{ v.area_visita }}</td>
+              <td>{{ v.autorizado_por }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <div class="text-center py-5">
+        <i class="fas fa-user-clock fa-4x text-muted mb-3"></i>
+        <h5 class="text-muted">No se encontraron visitantes para este período</h5>
+      </div>
+      {% endif %}
+    </div>
+   </div>
+   {% endblock %}
+   
+   {% block extra_js %}
+   <script>
+    document.addEventListener('DOMContentLoaded', function() {
+      // Configurar fecha actual si no hay fecha seleccionada
+      const fechaInicioInput = document.getElementById('fecha_inicio');
+      const fechaFinInput = document.getElementById('fecha_fin');
+      
+      if (!fechaInicioInput.value || !fechaFinInput.value) {
+        const hoy = new Date().toISOString().split('T')[0];
+        if (!fechaInicioInput.value) fechaInicioInput.value = hoy;
+        if (!fechaFinInput.value) fechaFinInput.value = hoy;
+      }
+    });
+    
+    function exportarExcel() {
+      // En un entorno real, implementaríamos la conversión a Excel
+      // Para este ejemplo, simplemente simulamos la descarga
+      alert('Función de exportación a Excel.\nEn una implementación real, esta función generaría y descargaría un archivo Excel con los datos de la tabla.');
+      
+      // Redireccionar a la URL de exportación
+      const fechaInicio = document.getElementById('fecha_inicio').value;
+      const fechaFin = document.getElementById('fecha_fin').value;
+      
+      // Usar la ruta de exportación existente
+      window.location.href = `{% url 'export_attendance' %}?start_date=${fechaInicio}&end_date=${fechaFin}`;
+    }
+   </script>
+   {% endblock %}

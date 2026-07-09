@@ -1,0 +1,55 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Usuarios Globales{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-user-shield me-2"></i>Usuarios</h1>
+  <a href="{% url 'global_user_create' %}" class="btn btn-primary">
+    <i class="fas fa-user-plus me-1"></i>Nuevo Usuario
+  </a>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Organización</th>
+            <th>Rol</th>
+            <th>Correo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for usuario in usuarios %}
+            <tr>
+              <td>{{ usuario.username }}</td>
+              <td>{{ usuario.organization.name|default:"Global" }}</td>
+              <td>{{ usuario.get_user_type_display }}</td>
+              <td>{{ usuario.email|default:"---" }}</td>
+              <td>
+                {% if usuario.is_active %}
+                  <span class="badge bg-success">Activo</span>
+                {% else %}
+                  <span class="badge bg-secondary">Inactivo</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{% url 'global_user_update' usuario.id %}" class="btn btn-sm btn-primary">
+                  <i class="fas fa-edit me-1"></i>Editar
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="text-center">No hay usuarios registrados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

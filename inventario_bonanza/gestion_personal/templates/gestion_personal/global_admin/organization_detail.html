@@ -1,0 +1,201 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}{{ organizacion.name }}{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-building me-2"></i>{{ organizacion.name }}</h1>
+  <div class="d-flex gap-2">
+    <a href="{% url 'global_person_create' %}?organization={{ organizacion.id }}" class="btn btn-primary">
+      <i class="fas fa-user-plus me-1"></i>Nueva Persona
+    </a>
+    <a href="{% url 'global_records' %}?organization={{ organizacion.id }}" class="btn btn-warning">
+      <i class="fas fa-clipboard-list me-1"></i>Registros
+    </a>
+    <a href="{% url 'global_people_csv' %}?organization={{ organizacion.id }}" class="btn btn-success">
+      <i class="fas fa-file-csv me-1"></i>CSV
+    </a>
+    <a href="{% url 'global_people_photos_zip' %}?organization={{ organizacion.id }}" class="btn btn-outline-dark">
+      <i class="fas fa-file-archive me-1"></i>Fotos ZIP
+    </a>
+    <a href="{% url 'organization_update' organizacion.id %}" class="btn btn-outline-primary">
+      <i class="fas fa-edit me-1"></i>Editar
+    </a>
+    <a href="{% url 'organization_list' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-1"></i>Volver
+    </a>
+  </div>
+</div>
+
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card bg-dark text-white">
+      <div class="card-body">
+        <h5>Identificador</h5>
+        <h2 class="h4">{{ organizacion.slug }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <h5>Activos</h5>
+        <h2>{{ total_personas_activas }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-secondary text-white">
+      <div class="card-body">
+        <h5>Pasivos</h5>
+        <h2>{{ total_personas_pasivas }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body">
+        <h5>Usuarios</h5>
+        <h2>{{ usuarios.count }}</h2>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-warning text-dark d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Vehículos recientes</h5>
+    <span class="badge bg-dark">{{ total_vehiculos }} total</span>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Chofer</th>
+            <th>Cédula</th>
+            <th>Ingreso</th>
+            <th>Salida</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for vehicle in vehiculos_recientes %}
+            <tr>
+              <td>{{ vehicle.placa }}</td>
+              <td>{{ vehicle.driver_name }}</td>
+              <td>{{ vehicle.driver_id_number|default:"---" }}</td>
+              <td>{{ vehicle.fecha_ingreso|date:"d/m/Y H:i" }}</td>
+              <td>{{ vehicle.fecha_salida|date:"d/m/Y H:i"|default:"Pendiente" }}</td>
+              <td>
+                {% if vehicle.esta_dentro %}
+                  <span class="badge bg-warning text-dark">Dentro</span>
+                {% else %}
+                  <span class="badge bg-success">Salió</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="6" class="text-center">No hay vehículos registrados en esta organización.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0"><i class="fas fa-users me-2"></i>Personas</h5>
+    <a href="{% url 'global_person_list' %}?organization={{ organizacion.id }}" class="btn btn-sm btn-light">
+      Ver todas
+    </a>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Identificación</th>
+            <th>Cargo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for persona in personas %}
+            <tr>
+              <td>{{ persona.first_name }} {{ persona.last_name }}</td>
+              <td>{{ persona.id_number }}</td>
+              <td>{{ persona.cargo|default:"---" }}</td>
+              <td>
+                {% if persona.estado == "activo" %}
+                  <span class="badge bg-success">Activo</span>
+                {% else %}
+                  <span class="badge bg-secondary">Pasivo</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{% url 'global_person_update' persona.id %}" class="btn btn-sm btn-primary">
+                  <i class="fas fa-edit me-1"></i>Editar
+                </a>
+                <a href="{% url 'global_person_delete' persona.id %}" class="btn btn-sm btn-danger">
+                  <i class="fas fa-trash me-1"></i>Eliminar
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-center">No hay personas registradas en esta organización.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0"><i class="fas fa-user-shield me-2"></i>Usuarios</h5>
+  </div>
+  <div class="card-body">
+    <div class="table-responsive">
+      <table class="table table-hover">
+        <thead>
+          <tr>
+            <th>Usuario</th>
+            <th>Rol</th>
+            <th>Correo</th>
+            <th>Estado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for usuario in usuarios %}
+            <tr>
+              <td>{{ usuario.username }}</td>
+              <td>{{ usuario.get_user_type_display }}</td>
+              <td>{{ usuario.email|default:"---" }}</td>
+              <td>
+                {% if usuario.is_active %}
+                  <span class="badge bg-success">Activo</span>
+                {% else %}
+                  <span class="badge bg-secondary">Inactivo</span>
+                {% endif %}
+              </td>
+              <td>
+                <a href="{% url 'global_user_update' usuario.id %}" class="btn btn-sm btn-primary">
+                  <i class="fas fa-edit me-1"></i>Editar
+                </a>
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-center">No hay usuarios registrados en esta organización.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

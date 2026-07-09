@@ -1,0 +1,213 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+
+{% block title %}Detalle de Consulta Médica{% endblock %}
+
+{% block extra_css %}
+<style>
+  .medical-card {
+    border-left: 4px solid #17a2b8;
+    border-radius: 6px;
+  }
+  .vital-sign {
+    text-align: center;
+    padding: 15px;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    background-color: #f8f9fa;
+  }
+  .vital-sign i {
+    font-size: 2rem;
+    margin-bottom: 10px;
+    opacity: 0.7;
+  }
+  .vital-sign .value {
+    font-size: 1.5rem;
+    font-weight: bold;
+  }
+  .vital-sign .label {
+    font-size: 0.9rem;
+    color: #6c757d;
+  }
+  .observation-card {
+    background-color: #f8f9fa;
+    border-radius: 8px;
+    padding: 20px;
+  }
+  .weight-icon { color: #fd7e14; }
+  .temp-icon { color: #dc3545; }
+  .pressure-icon { color: #6610f2; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-clipboard-check me-2"></i>Detalle de Consulta Médica
+  </h1>
+  <div>
+    <a href="{% url 'dashboard_medico' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-1"></i>Volver
+    </a>
+    <a href="{% url 'create_medical_consultation' %}?person_id={{ consulta.person.id }}" class="btn btn-primary">
+      <i class="fas fa-plus-circle me-1"></i>Nueva Consulta
+    </a>
+  </div>
+</div>
+
+<div class="row">
+  <!-- Información del paciente -->
+  <div class="col-md-4 mb-4">
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-user me-2"></i>Datos del Paciente</h5>
+      </div>
+      <div class="card-body">
+        <div class="text-center mb-3">
+          {% if consulta.person.foto %}
+            <img src="{{ consulta.person.foto.url }}" class="img-fluid rounded-circle" style="max-height: 120px; max-width: 120px; object-fit: cover;" alt="Foto">
+          {% else %}
+            <img src="{% static 'img/default.jpg' %}" class="img-fluid rounded-circle" style="max-height: 120px; max-width: 120px; object-fit: cover;" alt="Sin foto">
+          {% endif %}
+        </div>
+        
+        <h4 class="text-center mb-3">{{ consulta.person.first_name }} {{ consulta.person.last_name }}</h4>
+        
+        <div class="list-group list-group-flush">
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <span>Cédula:</span>
+            <strong>{{ consulta.person.id_number }}</strong>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <span>Edad:</span>
+            <strong>
+              {% with edad=consulta.person.birth_date|timesince:consulta.fecha %}
+                {{ edad.split(',')[0] }}
+              {% endwith %}
+            </strong>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <span>Género:</span>
+            <strong>{{ consulta.person.get_gender_display }}</strong>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <span>Teléfono:</span>
+            <strong>{{ consulta.person.phone_number|default:"No especificado" }}</strong>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <span>Contacto emergencia:</span>
+            <strong>{{ consulta.person.contacto_emergencia|default:"No especificado" }}</strong>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- Detalles de la consulta -->
+  <div class="col-md-8 mb-4">
+    <div class="card shadow-sm medical-card">
+      <div class="card-header bg-info text-white">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="mb-0"><i class="fas fa-stethoscope me-2"></i>Consulta Médica</h5>
+          <span class="badge bg-light text-dark">{{ consulta.fecha|date:"d/m/Y H:i" }}</span>
+        </div>
+      </div>
+      <div class="card-body">
+        <!-- Doctor que atendió -->
+        <div class="mb-4">
+          <p class="mb-1"><small class="text-muted">Atendido por:</small></p>
+          <p class="border-bottom pb-2">
+            <i class="fas fa-user-md me-2 text-primary"></i>
+            <strong>Dr. {{ consulta.doctor.first_name }} {{ consulta.doctor.last_name }}</strong>
+          </p>
+        </div>
+        
+        <!-- Signos vitales -->
+        <h5 class="mb-3">Signos Vitales</h5>
+        <div class="row mb-4">
+          <div class="col-md-4">
+            <div class="vital-sign">
+              <i class="fas fa-weight weight-icon"></i>
+              <div class="value">{{ consulta.peso|default:"--" }} {% if consulta.peso %}kg{% endif %}</div>
+              <div class="label">Peso</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="vital-sign">
+              <i class="fas fa-thermometer-half temp-icon"></i>
+              <div class="value">{{ consulta.temperatura|default:"--" }} {% if consulta.temperatura %}°C{% endif %}</div>
+              <div class="label">Temperatura</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="vital-sign">
+              <i class="fas fa-heartbeat pressure-icon"></i>
+              <div class="value">{{ consulta.presion|default:"--" }} {% if consulta.presion %}mmHg{% endif %}</div>
+              <div class="label">Presión Arterial</div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Observaciones -->
+        <h5 class="mb-3">Observaciones Médicas</h5>
+        <div class="observation-card">
+          {% if consulta.observaciones %}
+            {{ consulta.observaciones|linebreaks }}
+          {% else %}
+            <p class="text-muted text-center">No se registraron observaciones</p>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Historial de consultas anteriores -->
+<div class="row">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-secondary text-white">
+        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Historial de Consultas</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Fecha</th>
+                <th>Doctor</th>
+                <th>Peso</th>
+                <th>Temperatura</th>
+                <th>Presión</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in consulta.person.medical_consultations.all %}
+              {% if c.id != consulta.id %}  <!-- No mostrar la consulta actual -->
+              <tr>
+                <td>{{ c.fecha|date:"d/m/Y H:i" }}</td>
+                <td>{{ c.doctor.first_name }} {{ c.doctor.last_name }}</td>
+                <td>{{ c.peso|default:"--" }} {% if c.peso %}kg{% endif %}</td>
+                <td>{{ c.temperatura|default:"--" }} {% if c.temperatura %}°C{% endif %}</td>
+                <td>{{ c.presion|default:"--" }}</td>
+                <td>
+                  <a href="{% url 'medical_consultation_detail' c.id %}" class="btn btn-sm btn-info text-white">
+                    <i class="fas fa-eye me-1"></i>Ver
+                  </a>
+                </td>
+              </tr>
+              {% endif %}
+              {% empty %}
+              <tr>
+                <td colspan="6" class="text-center py-4">No hay consultas médicas previas</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

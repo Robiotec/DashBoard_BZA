@@ -1,0 +1,239 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Panel de Técnico de Seguridad{% endblock %}
+
+{% block extra_css %}
+<style>
+  .card-search {
+    border-top: 4px solid #0d6efd;
+    border-radius: 6px;
+  }
+  .card-epp {
+    border-left: 4px solid #198754;
+    border-radius: 6px;
+  }
+  .epp-card {
+    transition: all 0.3s ease;
+  }
+  .epp-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+  .profile-img {
+    width: 120px;
+    height: 120px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 5px solid #f8f9fa;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.2);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-hard-hat me-2"></i>Control de EPP's
+  </h1>
+</div>
+
+<!-- Buscador de personal -->
+<div class="row mb-4">
+  <div class="col-md-6 mx-auto">
+    <div class="card shadow-sm card-search">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-search me-2"></i>Buscar Personal</h5>
+      </div>
+      <div class="card-body">
+        <form method="get" action="{% url 'dashboard_tecnico' %}">
+          <div class="input-group">
+            <input type="text" name="cedula" class="form-control form-control-lg" placeholder="Ingresar número de cédula" value="{{ request.GET.cedula }}" required>
+            <button class="btn btn-primary" type="submit">
+              <i class="fas fa-search me-1"></i>Buscar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if persona %}
+<div class="row">
+  <div class="col-md-4 mb-4">
+    <!-- Información de la persona -->
+    <div class="card shadow-sm h-100">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-user me-2"></i>Información Personal</h5>
+      </div>
+      <div class="card-body text-center">
+        <div class="mb-3">
+          {% if persona.foto %}
+            <img src="{{ persona.foto.url }}" class="profile-img" alt="Foto">
+          {% else %}
+            <img src="{% static 'img/default.jpg' %}" class="profile-img" alt="Sin foto">
+          {% endif %}
+        </div>
+        <h4>{{ persona.first_name }} {{ persona.last_name }}</h4>
+        <p class="text-muted">{{ persona.id_number }}</p>
+        
+        <div class="list-group list-group-flush text-start mt-3">
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Cargo:</strong>
+            <span>{{ persona.cargo|default:"No especificado" }}</span>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Área:</strong>
+            <span>{{ persona.area|default:"No especificado" }}</span>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Departamento:</strong>
+            <span>{{ persona.departamento|default:"No especificado" }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-8 mb-4">
+    <!-- Asignación de EPP -->
+    <div class="card shadow-sm card-epp mb-4">
+      <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="fas fa-shield-alt me-2"></i>Asignar Equipo de Protección Personal</h5>
+      </div>
+      <div class="card-body">
+        <form method="post" action="{% url 'asignar_epp' %}">
+          {% csrf_token %}
+          <input type="hidden" name="person" value="{{ persona.id }}">
+          
+          <div class="mb-3">
+            <label for="id_tipo_epp" class="form-label">Tipo de EPP</label>
+            <select id="id_tipo_epp" name="tipo_epp" class="form-select" required>
+              <option value="">Seleccione un tipo de EPP</option>
+              <option value="Casco de seguridad">Casco de seguridad</option>
+              <option value="Botas de seguridad">Botas de seguridad</option>
+              <option value="Guantes de protección">Guantes de protección</option>
+              <option value="Protectores auditivos">Protectores auditivos</option>
+              <option value="Gafas de seguridad">Gafas de seguridad</option>
+              <option value="Respirador">Respirador</option>
+              <option value="Arnés de seguridad">Arnés de seguridad</option>
+              <option value="Chaleco reflectante">Chaleco reflectante</option>
+              <option value="Ropa de protección">Ropa de protección</option>
+              <option value="Otro">Otro</option>
+            </select>
+          </div>
+          
+          <div class="mb-3">
+            <label for="id_observaciones" class="form-label">Observaciones</label>
+            <textarea id="id_observaciones" name="observaciones" rows="3" class="form-control"></textarea>
+          </div>
+          
+          <div class="d-grid">
+            <button type="submit" class="btn btn-success">
+              <i class="fas fa-save me-1"></i>Registrar Entrega de EPP
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+    
+    <!-- Historial de EPPs asignados -->
+    <div class="card shadow-sm">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-history me-2"></i>Historial de EPPs Asignados</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Fecha</th>
+                <th>Tipo de EPP</th>
+                <th>Asignado por</th>
+                <th>Observaciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for epp in historial_epp %}
+              <tr>
+                <td>{{ epp.fecha_entrega|date:"d/m/Y" }}</td>
+                <td>{{ epp.tipo_epp }}</td>
+                <td>{{ epp.asignado_por.username }}</td>
+                <td>{{ epp.observaciones|default:"---" }}</td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="4" class="text-center py-4">No hay registros de EPPs asignados.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EPPs por categoría -->
+<div class="row">
+  {% if historial_epp %}
+  <div class="col-12 mb-4">
+    <h4 class="mb-3">EPPs por Categoría</h4>
+    <div class="row">
+      {% regroup historial_epp by tipo_epp as epp_list %}
+      {% for epp_group in epp_list %}
+      <div class="col-md-3 mb-3">
+        <div class="card epp-card h-100">
+          <div class="card-body text-center">
+            {% if epp_group.grouper == 'Casco de seguridad' %}
+              <i class="fas fa-hard-hat fa-3x text-warning mb-3"></i>
+            {% elif epp_group.grouper == 'Botas de seguridad' %}
+              <i class="fas fa-boot fa-3x text-secondary mb-3"></i>
+            {% elif epp_group.grouper == 'Guantes de protección' %}
+              <i class="fas fa-mitten fa-3x text-info mb-3"></i>
+            {% elif epp_group.grouper == 'Protectores auditivos' %}
+              <i class="fas fa-headphones fa-3x text-danger mb-3"></i>
+            {% elif epp_group.grouper == 'Gafas de seguridad' %}
+              <i class="fas fa-glasses fa-3x text-primary mb-3"></i>
+            {% elif epp_group.grouper == 'Respirador' %}
+              <i class="fas fa-mask fa-3x text-success mb-3"></i>
+            {% elif epp_group.grouper == 'Arnés de seguridad' %}
+              <i class="fas fa-harddisk fa-3x text-warning mb-3"></i>
+            {% elif epp_group.grouper == 'Chaleco reflectante' %}
+              <i class="fas fa-vest fa-3x text-warning mb-3"></i>
+            {% else %}
+              <i class="fas fa-shield-alt fa-3x text-secondary mb-3"></i>
+            {% endif %}
+            <h5 class="card-title">{{ epp_group.grouper }}</h5>
+            <p class="card-text">
+              <span class="badge bg-primary">{{ epp_group.list|length }} asignaciones</span>
+            </p>
+            <p class="card-text small text-muted">
+              Última entrega: {{ epp_group.list.0.fecha_entrega|date:"d/m/Y" }}
+            </p>
+          </div>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% else %}
+<!-- Mensaje si no se ha buscado -->
+<div class="row">
+  <div class="col-12">
+    <div class="card text-center py-5">
+      <div class="card-body">
+        <i class="fas fa-search fa-4x text-muted mb-3"></i>
+        <h4 class="text-muted">Busque a un empleado para gestionar sus EPPs</h4>
+        <p class="text-muted">Ingrese el número de cédula en el buscador para comenzar</p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}

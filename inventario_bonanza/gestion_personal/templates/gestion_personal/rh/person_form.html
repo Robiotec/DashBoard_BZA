@@ -1,0 +1,203 @@
+{% extends "gestion_personal/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}
+    {% if form.instance.pk %}
+        Editar Persona - RH
+    {% else %}
+        Nueva Persona - RH
+    {% endif %}
+{% endblock %}
+
+{% block extra_css %}
+<style>
+    .person-form-card {
+        max-width: 900px;
+        margin: 0 auto;
+    }
+    .person-form-card .card-body {
+        padding: 1rem;
+    }
+    .person-form-card .form-label {
+        font-size: 0.85rem;
+        margin-bottom: 0.25rem;
+    }
+    .person-form-card .mb-3 {
+        margin-bottom: 0.65rem !important;
+    }
+    .section-title {
+        font-size: 0.9rem;
+        font-weight: 700;
+        color: #495057;
+        border-bottom: 1px solid #dee2e6;
+        margin: 0.35rem 0 0.75rem;
+        padding-bottom: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        {% if form.instance.pk %}
+            <i class="fas fa-user-edit me-2"></i>Editar Persona
+        {% else %}
+            <i class="fas fa-user-plus me-2"></i>Nueva Persona
+        {% endif %}
+    </h1>
+    <div>
+        {% if user.user_type == 'global_admin' %}
+        <a href="{% url 'global_person_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Volver a la lista
+        </a>
+        {% else %}
+        <a href="{% url 'person_list' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Volver a la lista
+        </a>
+        {% endif %}
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow-sm person-form-card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-user me-2"></i>Información Personal
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if form_organization %}
+                    <div class="alert alert-info">
+                        <i class="fas fa-building me-1"></i>
+                        Esta persona se agregará a: <strong>{{ form_organization.name }}</strong>.
+                    </div>
+                {% elif user.user_type == 'global_admin' %}
+                    <div class="alert alert-warning">
+                        <i class="fas fa-building me-1"></i>
+                        Seleccione la organización antes de guardar la persona.
+                    </div>
+                {% endif %}
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+
+                    <div class="section-title">Datos principales</div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            {{ form.first_name|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.last_name|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.id_number|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            {{ form.gender|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.birth_date|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.phone_number|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    {% if form.organization.is_hidden %}
+                        {{ form.organization }}
+                    {% else %}
+                        {{ form.organization|as_crispy_field }}
+                    {% endif %}
+
+                    <div class="section-title">Información laboral</div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            {{ form.cargo|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.departamento|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.fecha_ingreso|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <div class="row">
+                        <div class="col-md-4">
+                            {{ form.area_option|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4" id="area-other-wrapper">
+                            {{ form.area_other|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.dias_jornada|as_crispy_field }}
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            {{ form.observaciones_jornada|as_crispy_field }}
+                        </div>
+                    </div>
+
+                    <div class="section-title">Contacto y adjuntos</div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            {{ form.email|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.contacto_emergencia|as_crispy_field }}
+                        </div>
+                        <div class="col-md-4">
+                            {{ form.foto|as_crispy_field }}
+                            {% if form.instance.foto %}
+                                <img src="{{ form.instance.foto.url }}" alt="Foto actual" style="max-height: 70px;" class="img-thumbnail">
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    {{ form.address|as_crispy_field }}
+                    {{ form.anotaciones_rrhh|as_crispy_field }}
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save me-1"></i>Guardar
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const areaSelect = document.querySelector('[data-area-option="true"]');
+        const otherWrapper = document.getElementById('area-other-wrapper');
+        const otherInput = otherWrapper ? otherWrapper.querySelector('input') : null;
+
+        function toggleOtherArea() {
+            if (!areaSelect || !otherWrapper) {
+                return;
+            }
+            const showOther = areaSelect.value === 'otro';
+            otherWrapper.style.display = showOther ? '' : 'none';
+            if (otherInput) {
+                otherInput.required = showOther;
+                if (!showOther) {
+                    otherInput.value = '';
+                }
+            }
+        }
+
+        if (areaSelect) {
+            areaSelect.addEventListener('change', toggleOtherArea);
+            toggleOtherArea();
+        }
+    })();
+</script>
+{% endblock %}

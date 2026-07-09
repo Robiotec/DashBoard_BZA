@@ -1,0 +1,527 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Panel de Administrador - {{ area }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .card-stat {
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    transition: all 0.3s ease;
+  }
+  .card-stat:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+  }
+  .stat-icon {
+    font-size: 2rem;
+    opacity: 0.8;
+  }
+  .card-person {
+    border-left: 4px solid #17a2b8;
+    transition: all 0.3s ease;
+  }
+  .card-person:hover {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+  .form-container {
+    border-left: 4px solid #ffc107;
+    border-radius: 6px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-user-hard-hat me-2"></i>Panel de Control - {{ area }}
+  </h1>
+  <div>
+    <a href="{% url 'visitas_programadas' %}" class="btn btn-info text-white">
+      <i class="fas fa-calendar-check me-1"></i>Gestionar Visitas
+    </a>
+  </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+  <div class="col-md-4 mb-3 mb-md-0">
+    <div class="card card-stat bg-primary text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Personal del Área</h6>
+            <h2 class="mb-0">{{ personal.count }}</h2>
+          </div>
+          <i class="fas fa-users stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-4 mb-3 mb-md-0">
+    <div class="card card-stat bg-warning text-dark">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">De Vacaciones</h6>
+            <h2 class="mb-0">{{ vacaciones_activas.count }}</h2>
+          </div>
+          <i class="fas fa-umbrella-beach stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-4">
+    <div class="card card-stat bg-danger text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Pendientes de Revisión Médica</h6>
+            <h2 class="mb-0">{{ sin_revision_medica.count }}</h2>
+          </div>
+          <i class="fas fa-stethoscope stat-icon"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Búsqueda de personal -->
+<div class="row mb-4">
+  <div class="col-md-6 mx-auto">
+    <div class="card shadow-sm">
+      <div class="card-header bg-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-search me-2"></i>Buscar Personal</h5>
+      </div>
+      <div class="card-body">
+        <form method="get" action="{% url 'dashboard_admin' %}">
+          <div class="input-group">
+            <input type="text" name="cedula" class="form-control form-control-lg" placeholder="Ingresar número de cédula" value="{{ request.GET.cedula }}" required>
+            <button class="btn btn-primary" type="submit">
+              <i class="fas fa-search me-1"></i>Buscar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if persona %}
+<!-- Información de la persona -->
+<div class="row mb-4">
+  <div class="col-md-4 mb-4">
+    <div class="card card-person shadow-sm h-100">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-user me-2"></i>Información Personal</h5>
+      </div>
+      <div class="card-body">
+        <div class="text-center mb-3">
+          {% if persona.foto %}
+            <img src="{{ persona.foto.url }}" class="img-fluid rounded-circle" style="max-height: 150px; max-width: 150px; object-fit: cover;" alt="Foto">
+          {% else %}
+            <img src="{% static 'img/default.jpg' %}" class="img-fluid rounded-circle" style="max-height: 150px; max-width: 150px; object-fit: cover;" alt="Sin foto">
+          {% endif %}
+        </div>
+        <h4 class="text-center mb-3">{{ persona.first_name }} {{ persona.last_name }}</h4>
+        <div class="list-group list-group-flush">
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Cédula:</strong>
+            <span>{{ persona.id_number }}</span>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Cargo:</strong>
+            <span>{{ persona.cargo|default:"No especificado" }}</span>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Área:</strong>
+            <span>{{ persona.area|default:"No especificado" }}</span>
+          </div>
+          <div class="list-group-item d-flex justify-content-between align-items-center">
+            <strong>Departamento:</strong>
+            <span>{{ persona.departamento|default:"No especificado" }}</span>
+          </div>
+        </div>
+        
+        {% if permiso_activo %}
+        <div class="alert alert-warning mt-3">
+          <i class="fas fa-exclamation-circle me-2"></i>
+          <strong>Permiso activo:</strong> {{ permiso_activo.motivo }}<br>
+          <small>{{ permiso_activo.fecha_inicio|date:"d/m/Y" }} al {{ permiso_activo.fecha_fin|date:"d/m/Y" }}</small>
+        </div>
+        {% endif %}
+        
+        {% if vacaciones_persona %}
+        <div class="alert alert-info mt-3">
+          <i class="fas fa-umbrella-beach me-2"></i>
+          <strong>Vacaciones activas:</strong><br>
+          <small>{{ vacaciones_persona.start_date|date:"d/m/Y" }} al {{ vacaciones_persona.end_date|date:"d/m/Y" }}</small>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-8 mb-4">
+    <!-- Tabs para acciones -->
+    <ul class="nav nav-tabs mb-3" id="personTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="history-tab" data-bs-toggle="tab" data-bs-target="#history" type="button" role="tab">
+          <i class="fas fa-history me-1"></i>Historial
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="permit-tab" data-bs-toggle="tab" data-bs-target="#permit" type="button" role="tab">
+          <i class="fas fa-calendar-check me-1"></i>Permiso
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="vacation-tab" data-bs-toggle="tab" data-bs-target="#vacation" type="button" role="tab">
+          <i class="fas fa-plane-departure me-1"></i>Vacaciones
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="sanction-tab" data-bs-toggle="tab" data-bs-target="#sanction" type="button" role="tab">
+          <i class="fas fa-gavel me-1"></i>Sanción
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="visitor-tab" data-bs-toggle="tab" data-bs-target="#visitor" type="button" role="tab">
+          <i class="fas fa-user-plus me-1"></i>Visitante
+        </button>
+      </li>
+    </ul>
+    
+    <!-- Contenido de tabs -->
+    <div class="tab-content" id="personTabsContent">
+      <!-- Historial -->
+      <div class="tab-pane fade show active" id="history" role="tabpanel">
+        <div class="card shadow-sm">
+          <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-history me-2"></i>Historial de Movimientos</h5>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Hora</th>
+                    <th>Tipo</th>
+                    <th>Motivo</th>
+                    <th>Registrado por</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for registro in historial %}
+                  <tr class="{% if registro.record_type == 'entrada' %}table-success{% else %}table-danger{% endif %}">
+                    <td>{{ registro.timestamp|date:"d/m/Y" }}</td>
+                    <td>{{ registro.timestamp|time:"H:i" }}</td>
+                    <td>
+                      <span class="badge {% if registro.record_type == 'entrada' %}bg-success{% else %}bg-danger{% endif %}">
+                        {{ registro.get_record_type_display }}
+                      </span>
+                    </td>
+                    <td>{{ registro.motivo|default:"---" }}</td>
+                    <td>{{ registro.recorded_by.username }}</td>
+                  </tr>
+                  {% empty %}
+                  <tr>
+                    <td colspan="5" class="text-center py-4">No hay registros de asistencia recientes.</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Permiso -->
+      <div class="tab-pane fade" id="permit" role="tabpanel">
+        <div class="card shadow-sm form-container">
+          <div class="card-header bg-warning text-dark">
+            <h5 class="mb-0"><i class="fas fa-calendar-check me-2"></i>Crear Permiso</h5>
+          </div>
+          <div class="card-body">
+            <form method="post" action="{% url 'crear_permiso_admin' %}">
+              {% csrf_token %}
+              <input type="hidden" name="person" value="{{ persona.id }}">
+              
+              <div class="mb-3">
+                <label for="id_motivo" class="form-label">Motivo del permiso</label>
+                <input type="text" name="motivo" id="id_motivo" class="form-control" required>
+              </div>
+              
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label for="id_fecha_inicio" class="form-label">Fecha de inicio</label>
+                  <input type="date" name="fecha_inicio" id="id_fecha_inicio" class="form-control" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label for="id_fecha_fin" class="form-label">Fecha de fin</label>
+                  <input type="date" name="fecha_fin" id="id_fecha_fin" class="form-control" required>
+                </div>
+              </div>
+              
+              <div class="d-grid">
+                <button type="submit" class="btn btn-warning">
+                  <i class="fas fa-save me-1"></i>Guardar Permiso
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Vacaciones -->
+      <div class="tab-pane fade" id="vacation" role="tabpanel">
+        <div class="card shadow-sm form-container">
+          <div class="card-header bg-info text-white">
+            <h5 class="mb-0"><i class="fas fa-plane-departure me-2"></i>Programar Vacaciones</h5>
+          </div>
+          <div class="card-body">
+            <form method="post" action="{% url 'crear_vacaciones_admin' %}">
+              {% csrf_token %}
+              <input type="hidden" name="person" value="{{ persona.id }}">
+              
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <label for="id_start_date" class="form-label">Fecha de inicio</label>
+                  <input type="date" name="start_date" id="id_start_date" class="form-control" required>
+                </div>
+                <div class="col-md-6 mb-3">
+                  <label for="id_end_date" class="form-label">Fecha de fin</label>
+                  <input type="date" name="end_date" id="id_end_date" class="form-control" required>
+                </div>
+              </div>
+              
+              <div class="d-grid">
+                <button type="submit" class="btn btn-info text-white">
+                  <i class="fas fa-save me-1"></i>Guardar Vacaciones
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Sanción -->
+      <div class="tab-pane fade" id="sanction" role="tabpanel">
+        <div class="card shadow-sm form-container">
+          <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="fas fa-gavel me-2"></i>Registrar Sanción</h5>
+          </div>
+          <div class="card-body">
+            <form method="post" action="{% url 'crear_sancion_admin' %}">
+              {% csrf_token %}
+              <input type="hidden" name="person" value="{{ persona.id }}">
+              
+              <div class="mb-3">
+                <label for="id_tipo" class="form-label">Tipo de sanción</label>
+                <input type="text" name="tipo" id="id_tipo" class="form-control" required>
+              </div>
+              
+              <div class="mb-3">
+                <label for="id_descripcion" class="form-label">Descripción</label>
+                <textarea name="descripcion" id="id_descripcion" rows="3" class="form-control" required></textarea>
+              </div>
+              
+              <div class="d-grid">
+                <button type="submit" class="btn btn-danger">
+                  <i class="fas fa-save me-1"></i>Registrar Sanción
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Visitante -->
+      <div class="tab-pane fade" id="visitor" role="tabpanel">
+        <div class="card shadow-sm form-container">
+          <div class="card-header bg-success text-white">
+            <h5 class="mb-0"><i class="fas fa-user-plus me-2"></i>Registrar Visitante</h5>
+          </div>
+          <div class="card-body">
+            <form method="post" action="{% url 'visitor_create_admin' %}">
+              {% csrf_token %}
+              
+              <div class="mb-3">
+                <label for="id_nombre" class="form-label">Nombre completo</label>
+                <input type="text" name="nombre" id="id_nombre" class="form-control" required>
+              </div>
+              
+              <div class="mb-3">
+                <label for="id_cedula" class="form-label">Cédula</label>
+                <input type="text" name="cedula" id="id_cedula" class="form-control" required>
+              </div>
+              
+              <div class="mb-3">
+                <label for="id_area_visita" class="form-label">Área a visitar</label>
+                <input type="text" name="area_visita" id="id_area_visita" class="form-control" value="{{ area }}" required>
+              </div>
+              
+              <div class="mb-3">
+                <label for="id_autorizado_por" class="form-label">Autorizado por</label>
+                <input type="text" name="autorizado_por" id="id_autorizado_por" class="form-control" value="{{ user.first_name }} {{ user.last_name }}" required>
+              </div>
+              
+              <div class="d-grid">
+                <button type="submit" class="btn btn-success">
+                  <i class="fas fa-save me-1"></i>Registrar Visitante
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Lista de personal en vacaciones -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-umbrella-beach me-2"></i>Personal en Vacaciones</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Nombre</th>
+                <th>Cédula</th>
+                <th>Cargo</th>
+                <th>Fecha Inicio</th>
+                <th>Fecha Fin</th>
+                <th>Días Restantes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for vacacion in vacaciones_activas %}
+              <tr>
+                <td>{{ vacacion.person.first_name }} {{ vacacion.person.last_name }}</td>
+                <td>{{ vacacion.person.id_number }}</td>
+                <td>{{ vacacion.person.cargo|default:"---" }}</td>
+                <td>{{ vacacion.start_date|date:"d/m/Y" }}</td>
+                <td>{{ vacacion.end_date|date:"d/m/Y" }}</td>
+                <td>
+                  {% with days=vacacion.end_date|timeuntil:today %}
+                    {{ days|default:"N/A" }}
+                  {% endwith %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="6" class="text-center py-4">No hay personal en vacaciones actualmente.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Personal pendiente de revisión médica -->
+<div class="row">
+  <div class="col-12">
+    <div class="card shadow-sm">
+      <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="fas fa-stethoscope me-2"></i>Personal Pendiente de Revisión Médica</h5>
+      </div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-hover mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Nombre</th>
+                <th>Cédula</th>
+                <th>Cargo</th>
+                <th>Fin de Vacaciones</th>
+                <th>Días desde retorno</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for persona in sin_revision_medica %}
+              <tr>
+                <td>{{ persona.first_name }} {{ persona.last_name }}</td>
+                <td>{{ persona.id_number }}</td>
+                <td>{{ persona.cargo|default:"---" }}</td>
+                <td>
+                  {% with vac=persona.vacation_records.all|dictsortreversed:"end_date"|first %}
+                    {{ vac.end_date|date:"d/m/Y" }}
+                  {% endwith %}
+                </td>
+                <td>
+                  {% with vac=persona.vacation_records.all|dictsortreversed:"end_date"|first %}
+                    {% with days=vac.end_date|timesince %}
+                      {{ days|default:"N/A" }}
+                    {% endwith %}
+                  {% endwith %}
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center py-4">No hay personal pendiente de revisión médica.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Validar fechas en formularios
+    const validarFechas = (inicio, fin) => {
+      if (inicio.value && fin.value) {
+        const fechaInicio = new Date(inicio.value);
+        const fechaFin = new Date(fin.value);
+        if (fechaFin < fechaInicio) {
+          alert('La fecha de fin debe ser posterior a la fecha de inicio');
+          fin.value = inicio.value;
+        }
+      }
+    };
+    
+    // Validar fechas de permiso
+    const fechaInicioPermiso = document.getElementById('id_fecha_inicio');
+    const fechaFinPermiso = document.getElementById('id_fecha_fin');
+    if (fechaInicioPermiso && fechaFinPermiso) {
+      fechaInicioPermiso.addEventListener('change', () => validarFechas(fechaInicioPermiso, fechaFinPermiso));
+      fechaFinPermiso.addEventListener('change', () => validarFechas(fechaInicioPermiso, fechaFinPermiso));
+    }
+    
+    // Validar fechas de vacaciones
+    const fechaInicioVacaciones = document.getElementById('id_start_date');
+    const fechaFinVacaciones = document.getElementById('id_end_date');
+    if (fechaInicioVacaciones && fechaFinVacaciones) {
+      fechaInicioVacaciones.addEventListener('change', () => validarFechas(fechaInicioVacaciones, fechaFinVacaciones));
+      fechaFinVacaciones.addEventListener('change', () => validarFechas(fechaInicioVacaciones, fechaFinVacaciones));
+    }
+    
+    // Establecer fecha mínima como hoy
+    const hoy = new Date().toISOString().split('T')[0];
+    if (fechaInicioPermiso) fechaInicioPermiso.min = hoy;
+    if (fechaFinPermiso) fechaFinPermiso.min = hoy;
+    if (fechaInicioVacaciones) fechaInicioVacaciones.min = hoy;
+    if (fechaFinVacaciones) fechaFinVacaciones.min = hoy;
+  });
+</script>
+{% endblock %}

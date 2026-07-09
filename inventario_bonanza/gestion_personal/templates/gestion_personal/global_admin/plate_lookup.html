@@ -1,0 +1,374 @@
+{% extends "gestion_personal/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Consulta de Placas{% endblock %}
+
+{% block extra_css %}
+{% if record.lookup_status == "pending" or record.lookup_status == "running" %}
+<meta http-equiv="refresh" content="6">
+{% endif %}
+<style>
+  .plate-table-window {
+    max-height: 560px;
+    overflow: auto;
+    border-top: 1px solid rgba(0,0,0,.08);
+  }
+  .plate-table-window thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    background: #212529;
+    color: #fff;
+    white-space: nowrap;
+  }
+  .plate-table-window td { vertical-align: middle; }
+  .plate-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+    font-weight: 800;
+    letter-spacing: .04em;
+  }
+  .plate-muted {
+    color: #6c757d;
+    font-size: .86rem;
+  }
+  .plate-filter {
+    background: #f8f9fa;
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 8px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-car me-2"></i>Placas</h1>
+  <a href="{% url 'dashboard_global_admin' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-1"></i>Volver
+  </a>
+</div>
+
+<ul class="nav nav-tabs mb-3" role="tablist">
+  <li class="nav-item" role="presentation">
+    <a class="nav-link {% if active_tab == 'consultas' %}active{% endif %}" href="{% url 'global_plate_lookup' %}?tab=consultas">
+      <i class="fas fa-search me-1"></i>Consulta y cola
+    </a>
+  </li>
+  <li class="nav-item" role="presentation">
+    <a class="nav-link {% if active_tab == 'base' %}active{% endif %}" href="{% url 'global_plate_lookup' %}?tab=base">
+      <i class="fas fa-database me-1"></i>Base local
+    </a>
+  </li>
+</ul>
+
+{% if active_tab == 'consultas' %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0"><i class="fas fa-search me-2"></i>Nueva consulta</h5>
+  </div>
+  <div class="card-body">
+    <form method="post" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <div class="col-md-9">
+        {{ form.placa|as_crispy_field }}
+      </div>
+      <div class="col-md-3 d-grid">
+        <button type="submit" class="btn btn-primary btn-lg">
+          <i class="fas fa-search me-1"></i>Consultar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if record %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0">{{ record.placa }}</h5>
+    <div class="d-flex gap-2 align-items-center">
+      {% if record.lookup_status == "completed" %}
+        <span class="badge bg-success">Completada</span>
+      {% elif record.lookup_status == "completed_with_errors" %}
+        <span class="badge bg-warning text-dark">Completada con errores</span>
+      {% elif record.lookup_status == "failed" %}
+        <span class="badge bg-danger">Fallida</span>
+      {% elif record.lookup_status == "running" %}
+        <span class="badge bg-info text-dark">Consultando</span>
+      {% else %}
+        <span class="badge bg-secondary">Pendiente</span>
+      {% endif %}
+      <span class="badge bg-light text-dark">{{ record.updated_at|date:"d/m/Y H:i" }}</span>
+    </div>
+  </div>
+  <div class="card-body">
+    {% if record.lookup_status == "pending" or record.lookup_status == "running" %}
+    <div class="alert alert-info mb-0">
+      <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+        Consulta en cola. Se procesará en segundo plano sin bloquear el dashboard.
+      </div>
+    </div>
+    {% elif record.lookup_status == "failed" %}
+    <div class="alert alert-danger mb-0">
+      {{ record.last_error|default:"La consulta falló. Intente nuevamente." }}
+    </div>
+    {% else %}
+    {% if record.placa_aliases %}
+    <div class="mb-3">
+      <strong>Variantes consultadas:</strong>
+      {% for alias in record.placa_aliases %}
+        <span class="badge bg-secondary">{{ alias }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="row g-3">
+      <div class="col-md-4"><strong>Propietario:</strong><br>{{ record.propietario|default:"---" }}</div>
+      <div class="col-md-4"><strong>Marca:</strong><br>{{ record.marca|default:"---" }}</div>
+      <div class="col-md-4"><strong>Modelo:</strong><br>{{ record.modelo|default:"---" }}</div>
+      <div class="col-md-3"><strong>Año:</strong><br>{{ record.anio|default:"---" }}</div>
+      <div class="col-md-3"><strong>Clase:</strong><br>{{ record.clase|default:"---" }}</div>
+      <div class="col-md-3"><strong>Servicio:</strong><br>{{ record.servicio|default:"---" }}</div>
+      <div class="col-md-3"><strong>Estado:</strong><br>{{ record.estado|default:"---" }}</div>
+      <div class="col-md-4"><strong>VIN:</strong><br>{{ record.vin|default:"---" }}</div>
+      <div class="col-md-4"><strong>Motor:</strong><br>{{ record.motor|default:"---" }}</div>
+      <div class="col-md-4"><strong>Placa anterior:</strong><br>{{ record.placa_anterior|default:"---" }}</div>
+      <div class="col-md-3"><strong>Color 1:</strong><br>{{ record.color_1|default:"---" }}</div>
+      <div class="col-md-3"><strong>Color 2:</strong><br>{{ record.color_2|default:"---" }}</div>
+      <div class="col-md-3"><strong>Carrocería:</strong><br>{{ record.carroceria|default:"---" }}</div>
+      <div class="col-md-3"><strong>Cilindraje:</strong><br>{{ record.cilindraje|default:"---" }}</div>
+      <div class="col-md-4"><strong>Matrícula:</strong><br>{{ record.fecha_matricula|default:"---" }}</div>
+      <div class="col-md-4"><strong>Vencimiento:</strong><br>{{ record.vencimiento_matricula|default:"---" }}</div>
+      <div class="col-md-4"><strong>Último pago:</strong><br>{{ record.ultimo_pago|default:"---" }}</div>
+    </div>
+    {% if record.source_errors %}
+    <hr>
+    <h6>Fuentes con error</h6>
+    {% for source, error in record.source_errors.items %}
+      <span class="badge bg-warning text-dark me-1">{{ source }}: {{ error }}</span>
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="row g-3 mb-3">
+  <div class="col-md-4">
+    <div class="plate-filter p-3">
+      <div class="plate-muted">Pendientes</div>
+      <h3 class="mb-0">{{ queue_counts.pending|default:0 }}</h3>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="plate-filter p-3">
+      <div class="plate-muted">Consultando</div>
+      <h3 class="mb-0">{{ queue_counts.running|default:0 }}</h3>
+    </div>
+  </div>
+  <div class="col-md-4">
+    <div class="plate-filter p-3">
+      <div class="plate-muted">Fallidas</div>
+      <h3 class="mb-0">{{ queue_counts.failed|default:0 }}</h3>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0"><i class="fas fa-list-check me-2"></i>Pendientes y fallidas</h5>
+  </div>
+  <div class="card-body plate-filter m-3">
+    <form method="get" class="row g-2 align-items-end">
+      <input type="hidden" name="tab" value="consultas">
+      <div class="col-md-5">
+        <label class="form-label">Buscar</label>
+        <input type="search" name="queue_q" value="{{ queue_query }}" class="form-control" placeholder="Placa, propietario o error">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Estado</label>
+        <select name="queue_status" class="form-select">
+          <option value="">Pendientes, consultando y fallidas</option>
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if queue_status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3 d-grid">
+        <button class="btn btn-primary" type="submit"><i class="fas fa-filter me-1"></i>Filtrar</button>
+      </div>
+    </form>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive plate-table-window">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Estado</th>
+            <th>Último error</th>
+            <th>Solicitada</th>
+            <th>Actualizada</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in queue_page %}
+          <tr>
+            <td><span class="plate-code">{{ item.placa }}</span></td>
+            <td>
+              {% if item.lookup_status == "failed" %}
+                <span class="badge bg-danger">{{ item.get_lookup_status_display }}</span>
+              {% elif item.lookup_status == "running" %}
+                <span class="badge bg-info text-dark">{{ item.get_lookup_status_display }}</span>
+              {% else %}
+                <span class="badge bg-secondary">{{ item.get_lookup_status_display }}</span>
+              {% endif %}
+            </td>
+            <td class="small">{{ item.last_error|default:"---"|truncatechars:100 }}</td>
+            <td>{{ item.requested_at|date:"d/m/Y H:i"|default:"---" }}</td>
+            <td>{{ item.updated_at|date:"d/m/Y H:i" }}</td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a class="btn btn-outline-primary" href="{% url 'global_plate_lookup' %}?tab=consultas&placa={{ item.placa }}"><i class="fas fa-eye"></i></a>
+                <form method="post" class="d-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="placa" value="{{ item.placa }}">
+                  <button class="btn btn-outline-secondary" type="submit" title="Consultar nuevamente"><i class="fas fa-sync-alt"></i></button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="6" class="text-center py-4">No hay placas en cola con ese filtro.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if queue_page.paginator.num_pages > 1 %}
+    <div class="p-3 d-flex justify-content-between align-items-center">
+      <span class="plate-muted">Página {{ queue_page.number }} de {{ queue_page.paginator.num_pages }}</span>
+      <div class="btn-group btn-group-sm">
+        {% if queue_page.has_previous %}
+        <a class="btn btn-outline-secondary" href="?tab=consultas&queue_q={{ queue_query|urlencode }}&queue_status={{ queue_status }}&queue_page={{ queue_page.previous_page_number }}">Anterior</a>
+        {% endif %}
+        {% if queue_page.has_next %}
+        <a class="btn btn-outline-secondary" href="?tab=consultas&queue_q={{ queue_query|urlencode }}&queue_status={{ queue_status }}&queue_page={{ queue_page.next_page_number }}">Siguiente</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% else %}
+<div class="card shadow-sm">
+  <div class="card-header bg-dark text-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+    <div>
+      <h5 class="mb-0"><i class="fas fa-database me-2"></i>Base de datos local</h5>
+      <small class="text-white-50">{{ total_placas_guardadas }} registro{% if total_placas_guardadas != 1 %}s{% endif %} encontrado{% if total_placas_guardadas != 1 %}s{% endif %}</small>
+    </div>
+  </div>
+  <div class="card-body plate-filter m-3">
+    <form method="get" class="row g-2 align-items-end">
+      <input type="hidden" name="tab" value="base">
+      <div class="col-md-3">
+        <label class="form-label">Placa exacta</label>
+        <input type="search" name="db_placa" value="{{ exact_plate }}" class="form-control" placeholder="Ej: GBM0542">
+      </div>
+      <div class="col-md-4">
+        <label class="form-label">Búsqueda general</label>
+        <input type="search" name="q" value="{{ plate_query }}" class="form-control" placeholder="Propietario, marca, modelo, VIN...">
+      </div>
+      <div class="col-md-3">
+        <label class="form-label">Estado</label>
+        <select name="db_status" class="form-select">
+          <option value="">Todos</option>
+          {% for value, label in status_choices %}
+          <option value="{{ value }}" {% if db_status == value %}selected{% endif %}>{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2 d-grid">
+        <button class="btn btn-primary" type="submit"><i class="fas fa-filter me-1"></i>Filtrar</button>
+      </div>
+    </form>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive plate-table-window">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Propietario</th>
+            <th>Marca</th>
+            <th>Modelo</th>
+            <th>Estado</th>
+            <th>Actualización</th>
+            <th>Usuario</th>
+            <th class="text-end">Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in db_page %}
+          <tr>
+            <td>
+              <span class="plate-code">{{ item.placa }}</span>
+              {% if item.placa_aliases %}
+              <div class="plate-muted">
+                {% for alias in item.placa_aliases|slice:":3" %}
+                  <span class="badge bg-secondary">{{ alias }}</span>
+                {% endfor %}
+              </div>
+              {% endif %}
+            </td>
+            <td>{{ item.propietario|default:"---" }}</td>
+            <td>{{ item.marca|default:"---" }}</td>
+            <td>{{ item.modelo|default:"---" }}</td>
+            <td>
+              {% if item.lookup_status == "completed" %}
+                <span class="badge bg-success">{{ item.get_lookup_status_display }}</span>
+              {% elif item.lookup_status == "completed_with_errors" %}
+                <span class="badge bg-warning text-dark">{{ item.get_lookup_status_display }}</span>
+              {% elif item.lookup_status == "failed" %}
+                <span class="badge bg-danger">{{ item.get_lookup_status_display }}</span>
+              {% elif item.lookup_status == "running" %}
+                <span class="badge bg-info text-dark">{{ item.get_lookup_status_display }}</span>
+              {% else %}
+                <span class="badge bg-secondary">{{ item.get_lookup_status_display }}</span>
+              {% endif %}
+            </td>
+            <td>{{ item.updated_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ item.consultado_por.username|default:"---" }}</td>
+            <td class="text-end">
+              <div class="btn-group btn-group-sm">
+                <a class="btn btn-outline-primary" href="{% url 'global_plate_lookup' %}?tab=consultas&placa={{ item.placa }}"><i class="fas fa-eye"></i></a>
+                <form method="post" class="d-inline">
+                  {% csrf_token %}
+                  <input type="hidden" name="placa" value="{{ item.placa }}">
+                  <button class="btn btn-outline-secondary" type="submit" title="Consultar nuevamente"><i class="fas fa-sync-alt"></i></button>
+                </form>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center py-4">No hay placas guardadas con ese filtro.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% if db_page.paginator.num_pages > 1 %}
+    <div class="p-3 d-flex justify-content-between align-items-center">
+      <span class="plate-muted">Página {{ db_page.number }} de {{ db_page.paginator.num_pages }}</span>
+      <div class="btn-group btn-group-sm">
+        {% if db_page.has_previous %}
+        <a class="btn btn-outline-secondary" href="?tab=base&db_placa={{ exact_plate|urlencode }}&q={{ plate_query|urlencode }}&db_status={{ db_status }}&db_page={{ db_page.previous_page_number }}">Anterior</a>
+        {% endif %}
+        {% if db_page.has_next %}
+        <a class="btn btn-outline-secondary" href="?tab=base&db_placa={{ exact_plate|urlencode }}&q={{ plate_query|urlencode }}&db_status={{ db_status }}&db_page={{ db_page.next_page_number }}">Siguiente</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

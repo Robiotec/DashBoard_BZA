@@ -1,0 +1,75 @@
+{% extends "gestion_personal/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Exportar Reporte de Asistencia{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        <i class="fas fa-file-excel me-2"></i>Exportar Reporte de Asistencia
+    </h1>
+    <div>
+        <a href="{% url 'dashboard_rrhh' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Volver al Dashboard
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card shadow-sm">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-calendar-alt me-2"></i>Seleccionar Período para Exportar
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="get" action="{% url 'export_attendance' %}">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="start_date" class="form-label">Fecha Inicial:</label>
+                                <input type="date" class="form-control" id="start_date" name="start_date" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label for="end_date" class="form-label">Fecha Final:</label>
+                                <input type="date" class="form-control" id="end_date" name="end_date" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-download me-1"></i>Generar Reporte Excel
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // Establecer fecha actual como valor por defecto
+        const today = new Date().toISOString().split('T')[0];
+        document.getElementById('start_date').value = today;
+        document.getElementById('end_date').value = today;
+        
+        // Validar fechas
+        const startDateInput = document.getElementById('start_date');
+        const endDateInput = document.getElementById('end_date');
+        
+        endDateInput.addEventListener('change', function() {
+            if (endDateInput.value < startDateInput.value) {
+                alert('La fecha final no puede ser anterior a la fecha inicial');
+                endDateInput.value = startDateInput.value;
+            }
+        });
+    });
+</script>
+{% endblock %}

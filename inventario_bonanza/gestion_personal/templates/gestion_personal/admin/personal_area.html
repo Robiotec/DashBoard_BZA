@@ -1,0 +1,59 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+
+{% block title %}Personal del Área - {{ area }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <h1>Personal del Área - {{ area }}</h1>
+
+  <form method="get" class="d-flex justify-content-between mb-3">
+    <input type="text" name="q" value="{{ request.GET.q }}" class="form-control me-2" placeholder="Buscar por nombre o cédula">
+    <button type="submit" class="btn btn-primary"><i class="fas fa-search me-1"></i>Buscar</button>
+    <a href="?" class="btn btn-outline-secondary ms-2">Limpiar</a>
+    
+  </form>
+
+  <div class="row">
+    <div class="col-12">
+      <div class="card">
+        <div class="card-header">
+          <h5 class="card-title">Lista de Personal</h5>
+        </div>
+        <div class="card-body">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Nombre</th>
+                <th>Cédula</th>
+                <th>Cargo</th>
+                <th>Departamento</th>
+                <th>Acciones</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for persona in personal %}
+              <tr>
+                <td>{{ persona.first_name }} {{ persona.last_name }}</td>
+                <td>{{ persona.id_number }}</td>
+                <td>{{ persona.cargo|default:"--" }}</td>
+                <td>{{ persona.departamento|default:"--" }}</td>
+                <td>
+                  <a href="{% url 'dashboard_admin' %}?cedula={{ persona.id_number }}" class="btn btn-sm btn-info">
+                    <i class="fas fa-eye"></i> Ver
+                  </a>
+                </td>
+              </tr>
+              {% empty %}
+              <tr>
+                <td colspan="5" class="text-center">No hay personal registrado en esta área.</td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

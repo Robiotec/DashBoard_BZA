@@ -1,0 +1,98 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Permisos y Vacaciones - Operador{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-clipboard-check me-2"></i>Permisos y Vacaciones Activas</h1>
+  <a href="{% url 'dashboard_operador' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-1"></i>Volver
+  </a>
+</div>
+
+<div class="row">
+  <div class="col-lg-6 mb-4">
+    <div class="card h-100">
+      <div class="card-header bg-warning text-dark">
+        <h5 class="mb-0"><i class="fas fa-user-check me-2"></i>Permisos de salida activos</h5>
+      </div>
+      <div class="card-body">
+        {% if permisos_activos %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>Persona</th>
+                  <th>Cédula</th>
+                  <th>Motivo</th>
+                  <th>Hasta</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for permiso in permisos_activos %}
+                <tr>
+                  <td>{{ permiso.person.first_name }} {{ permiso.person.last_name }}</td>
+                  <td>{{ permiso.person.id_number }}</td>
+                  <td>{{ permiso.motivo }}</td>
+                  <td>{{ permiso.fecha_fin|date:"d/m/Y" }}</td>
+                  <td>
+                    <a href="{% url 'dashboard_operador' %}?cedula={{ permiso.person.id_number }}" class="btn btn-sm btn-outline-primary">
+                      <i class="fas fa-search"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="alert alert-info mb-0">No hay permisos activos hoy.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-6 mb-4">
+    <div class="card h-100">
+      <div class="card-header bg-info text-white">
+        <h5 class="mb-0"><i class="fas fa-umbrella-beach me-2"></i>Personas en vacaciones</h5>
+      </div>
+      <div class="card-body">
+        {% if vacaciones_activas %}
+          <div class="table-responsive">
+            <table class="table table-sm align-middle">
+              <thead>
+                <tr>
+                  <th>Persona</th>
+                  <th>Cédula</th>
+                  <th>Desde</th>
+                  <th>Hasta</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {% for vacacion in vacaciones_activas %}
+                <tr>
+                  <td>{{ vacacion.person.first_name }} {{ vacacion.person.last_name }}</td>
+                  <td>{{ vacacion.person.id_number }}</td>
+                  <td>{{ vacacion.start_date|date:"d/m/Y" }}</td>
+                  <td>{{ vacacion.end_date|date:"d/m/Y" }}</td>
+                  <td>
+                    <a href="{% url 'dashboard_operador' %}?cedula={{ vacacion.person.id_number }}" class="btn btn-sm btn-outline-primary">
+                      <i class="fas fa-search"></i>
+                    </a>
+                  </td>
+                </tr>
+                {% endfor %}
+              </tbody>
+            </table>
+          </div>
+        {% else %}
+          <div class="alert alert-info mb-0">No hay personas en vacaciones hoy.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,343 @@
+{% extends "gestion_personal/base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block title %}Dashboard Recursos Humanos{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <h1 class="mb-4">
+    <i class="fas fa-chart-line me-2"></i>Panel de Recursos Humanos
+  </h1>
+
+  <!-- Acciones Rápidas -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card shadow-sm">
+        <div class="card-header bg-info text-white">
+          <h5 class="mb-0"><i class="fas fa-tools me-2"></i>Acciones Rápidas</h5>
+        </div>
+        <div class="card-body">
+          <div class="d-flex flex-wrap gap-2">
+            <a href="{% url 'person_create' %}" class="btn btn-primary">
+              <i class="fas fa-user-plus me-1"></i>Nueva Persona
+            </a>
+            <a href="{% url 'import_excel' %}" class="btn btn-warning">
+              <i class="fas fa-file-excel me-1"></i>Importar Excel
+            </a>
+            <a href="{% url 'export_attendance' %}" class="btn btn-info text-white">
+              <i class="fas fa-download me-1"></i>Exportar Reportes
+            </a>
+            <a href="{% url 'monthly_workday_template' %}" class="btn btn-success">
+              <i class="fas fa-calendar-days me-1"></i>Jornada Mensual
+            </a>
+            <a href="{% url 'registrar_sancion' %}" class="btn btn-danger">
+              <i class="fas fa-gavel me-1"></i>Nueva Sanción
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Estadísticas Rápidas -->
+  <div class="row mb-4">
+    <div class="col-md-4">
+      <div class="card bg-primary text-white mb-3">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-users me-2"></i>Total Personas</h5>
+          <h2>{{ total_personas|default:"0" }}</h2>
+          <small>{{ total_activos|default:"0" }} activas / {{ total_pasivos|default:"0" }} pasivas</small>
+          <a href="{% url 'person_list' %}" class="btn btn-sm btn-light mt-2">Ver lista</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card bg-warning text-dark mb-3">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-umbrella-beach me-2"></i>En Vacaciones</h5>
+          <h2>{{ vacaciones_actuales_count|default:"0" }}</h2>
+          <a href="{% url 'vacation_list' %}" class="btn btn-sm btn-light mt-2">Ver lista</a>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="card bg-info text-white mb-3">
+        <div class="card-body">
+          <h5 class="card-title"><i class="fas fa-clipboard-check me-2"></i>Asistencia Hoy</h5>
+          <h2>{{ asistencias_hoy|default:"0" }}</h2>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Buscador por cédula -->
+  <form method="get" class="row mb-4">
+    <div class="col-md-4">
+      <div class="input-group">
+        <input type="text" name="cedula" class="form-control" placeholder="Buscar por cédula..." value="{{ request.GET.cedula }}" required>
+        <button class="btn btn-primary" type="submit">
+          <i class="fas fa-search me-1"></i>Buscar
+        </button>
+      </div>
+    </div>
+  </form>
+
+  {% if persona %}
+    <!-- Tarjeta de información de la persona -->
+    <div class="row">
+      <div class="col-md-4 mb-4">
+        <div class="card shadow-sm h-100">
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="fas fa-user me-2"></i>Información Personal</h5>
+          </div>
+          <div class="card-body">
+            <div class="text-center mb-3">
+              {% if persona.foto %}
+                <img src="{{ persona.foto.url }}" class="img-fluid rounded" style="max-height: 150px;" alt="Foto">
+              {% else %}
+                <img src="{% static 'img/default.jpg' %}" class="img-fluid rounded" style="max-height: 150px;" alt="Sin foto">
+              {% endif %}
+            </div>
+            <h4>{{ persona.first_name }} {{ persona.last_name }}</h4>
+            <p><strong>Cédula:</strong> {{ persona.id_number }}</p>
+            <p><strong>Fecha de nacimiento:</strong> {{ persona.birth_date|date:"d/m/Y" }}</p>
+            <p><strong>Estado laboral:</strong>
+              {% if persona.estado == "activo" %}
+                <span class="badge bg-success">Activo</span>
+              {% else %}
+                <span class="badge bg-secondary">Pasivo</span>
+              {% endif %}
+            </p>
+            <p><strong>Cargo:</strong> {{ persona.cargo|default:"No especificado" }}</p>
+            <p><strong>Área:</strong> {{ persona.area|default:"No especificado" }}</p>
+            <p><strong>Departamento:</strong> {{ persona.departamento|default:"No especificado" }}</p>
+            <p><strong>Ingreso:</strong> {{ persona.fecha_ingreso|date:"d/m/Y"|default:"No especificado" }}</p>
+            <p><strong>Jornada:</strong> {{ persona.dias_jornada }} días</p>
+            {% if persona.observaciones_jornada %}
+              <p><strong>Notas de jornada:</strong> {{ persona.observaciones_jornada }}</p>
+            {% endif %}
+            {% if persona.estado == "pasivo" %}
+              <p><strong>Egreso:</strong> {{ persona.fecha_egreso|date:"d/m/Y"|default:"No especificado" }}</p>
+              <p><strong>Motivo:</strong> {{ persona.motivo_egreso|default:"No especificado" }}</p>
+              {% if persona.renuncia_pdf %}
+                <p>
+                  <strong>Renuncia:</strong>
+                  <a href="{{ persona.renuncia_pdf.url }}" target="_blank" class="btn btn-sm btn-outline-secondary ms-1">
+                    <i class="fas fa-file-pdf me-1"></i>Ver PDF
+                  </a>
+                </p>
+              {% endif %}
+            {% endif %}
+            <p><strong>Teléfono:</strong> {{ persona.phone_number|default:"No especificado" }}</p>
+            <p><strong>Emergencia:</strong> {{ persona.contacto_emergencia|default:"No especificado" }}</p>
+            <p><strong>Estado Médico:</strong>
+              {% if persona.medical_checkup %}
+                <span class="badge bg-success">Aprobado</span>
+              {% else %}
+                <span class="badge bg-danger">Pendiente</span>
+              {% endif %}
+            </p>
+            <!-- Vacaciones activas -->
+            {% if vacaciones_activas %}
+            <div class="alert alert-info py-2 mb-0">
+              <i class="fas fa-umbrella-beach me-2"></i>
+              <strong>Vacaciones activas:</strong> {{ vacaciones_activas.start_date|date:"d/m/Y" }} a {{ vacaciones_activas.end_date|date:"d/m/Y" }}
+            </div>
+            {% endif %}
+            <div class="d-grid gap-2 mt-3">
+              <a href="{% url 'person_update' persona.id %}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-edit me-1"></i>Editar información
+              </a>
+              <a href="{% url 'reporte_persona_pdf' persona.id %}" class="btn btn-outline-danger btn-sm" target="_blank">
+                <i class="fas fa-file-pdf me-1"></i>Exportar ficha PDF
+              </a>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-8 mb-4">
+        <!-- Botones para mostrar formularios -->
+        <div class="mb-3">
+          <button class="btn btn-warning me-2" type="button" data-bs-toggle="collapse" data-bs-target="#formPermiso" aria-expanded="false" aria-controls="formPermiso">
+            <i class="fas fa-user-check me-1"></i>Asignar Permiso de Salida
+          </button>
+
+          <button class="btn btn-info text-white" type="button" data-bs-toggle="collapse" data-bs-target="#formVacaciones" aria-expanded="false" aria-controls="formVacaciones">
+            <i class="fas fa-suitcase-rolling me-1"></i>Asignar Vacaciones
+          </button>
+          <button class="btn btn-danger" type="button" data-bs-toggle="collapse" data-bs-target="#formSancion" aria-expanded="false" aria-controls="formSancion">
+            <i class="fas fa-gavel me-1"></i>Registrar Sanción
+          </button>
+          {% if persona.estado == "activo" %}
+          <button class="btn btn-outline-danger" type="button" data-bs-toggle="collapse" data-bs-target="#formBaja" aria-expanded="false" aria-controls="formBaja">
+            <i class="fas fa-user-slash me-1"></i>Dar de baja / Renuncia
+          </button>
+          {% endif %}
+        </div>
+
+        <!-- Formulario de Permiso -->
+        <div class="collapse mb-3" id="formPermiso">
+          <div class="card card-body border-warning">
+            <h5 class="card-title"><i class="fas fa-calendar-check me-2"></i>Nuevo Permiso</h5>
+            <form method="post" action="{% url 'crear_permiso' %}">
+              {% csrf_token %}
+              <input type="hidden" name="person_id" value="{{ persona.id }}">
+              {{ form_permiso|crispy }}
+              <button class="btn btn-warning mt-2">Guardar Permiso</button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Formulario de Vacaciones -->
+        <div class="collapse mb-3" id="formVacaciones">
+          <div class="card card-body border-info">
+            <h5 class="card-title"><i class="fas fa-umbrella-beach me-2"></i>Nuevas Vacaciones</h5>
+            <form method="post" action="{% url 'crear_vacaciones' %}">
+              {% csrf_token %}
+              <input type="hidden" name="person" value="{{ persona.id }}">
+              {{ form_vacaciones|crispy }}
+              <button class="btn btn-info mt-2 text-white">Guardar Vacaciones</button>
+            </form>
+          </div>
+        </div>
+
+        <div class="collapse mb-3" id="formSancion">
+          <div class="card card-body border-danger">
+            <h5 class="card-title"><i class="fas fa-gavel me-2"></i>Nueva Sanción</h5>
+            <form method="post" action="{% url 'crear_sancion' %}">
+              {% csrf_token %}
+              {{ form_sancion|crispy }}
+              <button class="btn btn-danger mt-2">Guardar Sanción</button>
+            </form>
+          </div>
+        </div>
+
+        {% if persona.estado == "activo" %}
+        <div class="collapse mb-3" id="formBaja">
+          <div class="card card-body border-danger">
+            <h5 class="card-title"><i class="fas fa-user-slash me-2"></i>Baja por renuncia</h5>
+            <form method="post" action="{% url 'dar_baja_persona' persona.id %}" enctype="multipart/form-data">
+              {% csrf_token %}
+              {{ form_baja|crispy }}
+              <button class="btn btn-danger mt-2">
+                <i class="fas fa-save me-1"></i>Guardar baja
+              </button>
+            </form>
+          </div>
+        </div>
+        {% endif %}
+
+        {% if persona.anotaciones_rrhh %}
+        <div class="alert alert-light border">
+          <strong><i class="fas fa-sticky-note me-1"></i>Anotaciones RRHH:</strong><br>
+          {{ persona.anotaciones_rrhh|linebreaksbr }}
+        </div>
+        {% endif %}
+
+        <!-- Permisos y Vacaciones Activas -->
+        {% if permiso_activo %}
+        <div class="alert alert-warning">
+          <i class="fas fa-exclamation-circle me-1"></i>
+          <strong>Permiso activo:</strong> {{ permiso_activo.motivo }}<br>
+          Desde {{ permiso_activo.fecha_inicio|date:"d/m/Y" }} hasta {{ permiso_activo.fecha_fin|date:"d/m/Y" }}
+        </div>
+        {% endif %}
+
+        
+        <!-- Historial de Asistencia -->
+        <div class="card shadow-sm mb-3">
+          <div class="card-header bg-danger text-white">
+            <h5 class="mb-0"><i class="fas fa-gavel me-2"></i>Sanciones</h5>
+          </div>
+          <div class="card-body">
+            {% if historial_sanciones %}
+              <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Tipo</th>
+                      <th>Descripción</th>
+                      <th>Registrada por</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for sancion in historial_sanciones %}
+                      <tr>
+                        <td>{{ sancion.fecha|date:"d/m/Y" }}</td>
+                        <td>{{ sancion.tipo }}</td>
+                        <td>{{ sancion.descripcion }}</td>
+                        <td>{{ sancion.impuesta_por.username|default:"N/A" }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="text-muted mb-0">No hay sanciones registradas.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="card shadow-sm">
+          <div class="card-header bg-secondary text-white">
+            <h5 class="mb-0"><i class="fas fa-history me-2"></i>Historial de Movimientos</h5>
+          </div>
+          <div class="card-body">
+            <form method="get" class="mb-3">
+              <input type="hidden" name="cedula" value="{{ persona.id_number }}">
+              <div class="row align-items-end">
+                <div class="col-md-4">
+                  <label for="fecha" class="form-label">Filtrar por fecha:</label>
+                  <input type="date" name="fecha" id="fecha" class="form-control" value="{{ request.GET.fecha }}">
+                </div>
+                <div class="col-md-2">
+                  <button type="submit" class="btn btn-sm btn-secondary w-100">
+                    <i class="fas fa-filter me-1"></i>Filtrar
+                  </button>
+                </div>
+              </div>
+            </form>
+
+            {% if historial %}
+              <div class="table-responsive">
+                <table class="table table-sm table-hover">
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Hora</th>
+                      <th>Tipo</th>
+                      <th>Motivo</th>
+                      <th>Registrado por</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for reg in historial %}
+                      <tr class="{% if reg.record_type == 'entrada' %}table-success{% else %}table-danger{% endif %}">
+                        <td>{{ reg.timestamp|date:"d/m/Y" }}</td>
+                        <td>{{ reg.timestamp|time:"H:i" }}</td>
+                        <td>
+                          <span class="badge {% if reg.record_type == 'entrada' %}bg-success{% else %}bg-danger{% endif %}">
+                            {{ reg.get_record_type_display }}
+                          </span>
+                        </td>
+                        <td>{{ reg.motivo|default:"---" }}</td>
+                        <td>{{ reg.recorded_by.username }}</td>
+                      </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <p class="text-muted">No hay registros recientes.</p>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  {% endif %}
+</div>
+{% endblock %}

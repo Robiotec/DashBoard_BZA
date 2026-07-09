@@ -1,0 +1,14 @@
+Django==5.2
+crispy-bootstrap5
+django-crispy-forms
+pandas
+openpyxl
+reportlab
+xlwt
+django-storages
+boto3
+requests
+httpx
+beautifulsoup4
+playwright
+pypdf

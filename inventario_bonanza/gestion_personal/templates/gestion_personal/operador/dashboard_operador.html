@@ -1,0 +1,1101 @@
+{% extends "gestion_personal/base.html" %}
+{% load crispy_forms_tags %}
+{% load static %}
+
+{% block title %}Panel Operador - Control de Acceso{% endblock %}
+
+{% block extra_css %}
+<style>
+  .card-header-tabs {
+    margin-right: -1rem;
+    margin-left: -1rem;
+    margin-bottom: -0.5rem;
+  }
+  .section-title {
+    font-size: 1.25rem;
+    border-left: 4px solid #0d6efd;
+    padding-left: 10px;
+  }
+  .visitor-card {
+    transition: all 0.3s ease;
+  }
+  .visitor-card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+  .badge-large {
+    font-size: 0.9rem;
+    padding: 5px 10px;
+  }
+  .search-form {
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    padding: 15px;
+    border-left: 4px solid #0d6efd;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-user-check me-2"></i>Control de Acceso</h1>
+  <div class="btn-group">
+    <a href="{% url 'registros_detallados' %}" class="btn btn-outline-primary">
+      <i class="fas fa-list me-1"></i>Ver Registros
+    </a>
+  </div>
+</div>
+
+<!-- Tarjeta principal con pestañas -->
+<div class="card mb-4">
+  <div class="card-header bg-white">
+    <ul class="nav nav-tabs card-header-tabs" id="operadorTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="entradas-salidas-tab" data-bs-toggle="tab" 
+                data-bs-target="#entradas-salidas" type="button" role="tab">
+          <i class="fas fa-exchange-alt me-1"></i>Entradas y Salidas
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="visitantes-tab" data-bs-toggle="tab" 
+                data-bs-target="#visitantes" type="button" role="tab">
+          <i class="fas fa-user-friends me-1"></i>Visitantes
+        </button>
+      </li>
+    </ul>
+  </div>
+  <div class="card-body">
+    <div class="tab-content" id="operadorTabsContent">
+      <!-- Pestaña 1: Entradas y Salidas -->
+      <div class="tab-pane fade show active" id="entradas-salidas" role="tabpanel">
+        <div class="row">
+          <!-- Formulario de búsqueda por cédula -->
+          <div class="col-md-6 mb-4">
+            <h5 class="section-title mb-3">Buscar por Cédula</h5>
+            <div class="search-form">
+              <form method="get" action="{% url 'dashboard_operador' %}">
+                <div class="input-group">
+                  <input type="text" name="cedula" class="form-control" placeholder="Ingrese número de cédula" required>
+                  <button type="submit" class="btn btn-primary">
+                    <i class="fas fa-search me-1"></i>Buscar
+                  </button>
+                </div>
+                <small class="form-text text-muted">Busque a la persona para registrar entradas o salidas</small>
+              </form>
+            </div>
+          </div>
+          
+          <!-- Marcación Rápida -->
+          <div class="col-md-6 mb-4">
+            <h5 class="section-title mb-3">Marcación Rápida</h5>
+            <div class="row mb-3">
+              <!-- Entrada Rápida -->
+              <div class="col-4">
+                <div class="card visitor-card bg-success text-white">
+                  <div class="card-body text-center py-4">
+                    <i class="fas fa-sign-in-alt fa-3x mb-3"></i>
+                    <h5>Entrada</h5>
+                    <button class="btn btn-outline-light mt-2" data-bs-toggle="modal" data-bs-target="#modalMarcacionRapida" data-tipo="entrada">
+                      Registrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Salida Rápida -->
+              <div class="col-4">
+                <div class="card visitor-card bg-danger text-white">
+                  <div class="card-body text-center py-4">
+                    <i class="fas fa-sign-out-alt fa-3x mb-3"></i>
+                    <h5>Salida</h5>
+                    <button class="btn btn-outline-light mt-2" data-bs-toggle="modal" data-bs-target="#modalMarcacionRapida" data-tipo="salida">
+                      Registrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+              
+              <!-- Marcación Automática -->
+              <div class="col-4">
+                <div class="card visitor-card bg-primary text-white">
+                  <div class="card-body text-center py-4">
+                    <i class="fas fa-magic fa-3x mb-3"></i>
+                    <h5>Automático</h5>
+                    <button class="btn btn-outline-light mt-2" data-bs-toggle="modal" data-bs-target="#modalMarcacionAuto">
+                      Registrar
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <!-- Segunda fila para escáner QR -->
+            <div class="row">
+              <!-- Escáner QR Automático -->
+              <div class="col-12">
+                <div class="card visitor-card bg-dark text-white">
+                  <div class="card-body text-center py-4 d-flex align-items-center justify-content-between">
+                    <div>
+                      <i class="fas fa-qrcode fa-3x me-3"></i>
+                    </div>
+                    <div class="flex-grow-1">
+                      <h5>Escaneo de Código QR</h5>
+                      <p class="mb-0 small">Detecta automáticamente si es entrada o salida</p>
+                    </div>
+                    <div>
+                      <button class="btn btn-outline-light" data-bs-toggle="modal" data-bs-target="#modalQR">
+                        <i class="fas fa-camera me-1"></i>Escanear
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="col-12 mb-4">
+            <div class="row">
+              <div class="col-lg-6 mb-3">
+                <div class="card h-100">
+                  <div class="card-header bg-warning text-dark">
+                    <h5 class="mb-0"><i class="fas fa-user-check me-2"></i>Permisos activos hoy</h5>
+                  </div>
+                  <div class="card-body">
+                    {% if permisos_activos_operador %}
+                      <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                          <thead>
+                            <tr>
+                              <th>Persona</th>
+                              <th>Cédula</th>
+                              <th>Hasta</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for permiso in permisos_activos_operador|slice:":8" %}
+                            <tr>
+                              <td>{{ permiso.person.first_name }} {{ permiso.person.last_name }}</td>
+                              <td>{{ permiso.person.id_number }}</td>
+                              <td>{{ permiso.fecha_fin|date:"d/m/Y" }}</td>
+                              <td>
+                                <a href="{% url 'dashboard_operador' %}?cedula={{ permiso.person.id_number }}" class="btn btn-sm btn-outline-primary">
+                                  <i class="fas fa-search"></i>
+                                </a>
+                              </td>
+                            </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    {% else %}
+                      <div class="alert alert-info mb-0">No hay permisos activos.</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+              <div class="col-lg-6 mb-3">
+                <div class="card h-100">
+                  <div class="card-header bg-info text-white">
+                    <h5 class="mb-0"><i class="fas fa-umbrella-beach me-2"></i>Vacaciones activas</h5>
+                  </div>
+                  <div class="card-body">
+                    {% if vacaciones_activas_operador %}
+                      <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                          <thead>
+                            <tr>
+                              <th>Persona</th>
+                              <th>Cédula</th>
+                              <th>Regresa</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for vacacion in vacaciones_activas_operador|slice:":8" %}
+                            <tr>
+                              <td>{{ vacacion.person.first_name }} {{ vacacion.person.last_name }}</td>
+                              <td>{{ vacacion.person.id_number }}</td>
+                              <td>{{ vacacion.end_date|date:"d/m/Y" }}</td>
+                              <td>
+                                <a href="{% url 'dashboard_operador' %}?cedula={{ vacacion.person.id_number }}" class="btn btn-sm btn-outline-primary">
+                                  <i class="fas fa-search"></i>
+                                </a>
+                              </td>
+                            </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                    {% else %}
+                      <div class="alert alert-info mb-0">No hay vacaciones activas.</div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Resultado de la búsqueda -->
+          {% if persona %}
+          <div class="card mt-3">
+            <div class="card-header bg-primary text-white">
+              <h5 class="mb-0"><i class="fas fa-user me-2"></i>Información de la Persona</h5>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-3 text-center">
+                  {% if persona.foto %}
+                    <img src="{{ persona.foto.url }}" class="img-fluid rounded" style="max-height: 150px;" alt="Foto">
+                  {% else %}
+                    <img src="{% static 'img/default.jpg' %}" class="img-fluid rounded" style="max-height: 150px;" alt="Sin foto">
+                  {% endif %}
+                </div>
+                <div class="col-md-5">
+                  <h4>{{ persona.first_name }} {{ persona.last_name }}</h4>
+                  <p><strong>Cédula:</strong> {{ persona.id_number }}</p>
+                  <p><strong>Cargo:</strong> {{ persona.cargo|default:"---" }}</p>
+                  <p><strong>Área:</strong> {{ persona.area|default:"---" }}</p>
+                  <p><strong>Departamento:</strong> {{ persona.departamento|default:"---" }}</p>
+                  
+                  <!-- Estado -->
+                  <div class="mt-2">
+                    {% if esta_dentro %}
+                      <span class="badge bg-success badge-large">
+                        <i class="fas fa-door-open me-1"></i>Dentro del campamento
+                      </span>
+                    {% else %}
+                      <span class="badge bg-secondary badge-large">
+                        <i class="fas fa-door-closed me-1"></i>Fuera del campamento
+                      </span>
+                    {% endif %}
+                    
+                    {% if permiso_activo %}
+                      <span class="badge bg-warning text-dark badge-large mt-2">
+                        <i class="fas fa-exclamation-circle me-1"></i>Permiso activo
+                      </span>
+                    {% endif %}
+                    
+                    {% if vacaciones_activas %}
+                      <span class="badge bg-info text-white badge-large mt-2">
+                        <i class="fas fa-umbrella-beach me-1"></i>En vacaciones
+                      </span>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <!-- Botones de acción -->
+                  <div class="d-grid gap-2">
+                    <button class="btn btn-success" {% if esta_dentro %}disabled{% endif %} 
+                            onclick="registrarMovimiento('entrada', '{{ persona.id_number }}')">
+                      <i class="fas fa-sign-in-alt me-1"></i>Registrar Entrada
+                    </button>
+                    <button class="btn btn-danger" {% if not esta_dentro %}disabled{% endif %}
+                            onclick="registrarMovimiento('salida', '{{ persona.id_number }}')">
+                      <i class="fas fa-sign-out-alt me-1"></i>Registrar Salida
+                    </button>
+                    <button class="btn btn-warning" {% if esta_dentro or not vacaciones_activas %}disabled{% endif %}
+                            onclick="registrarMovimiento('regreso_vacaciones', '{{ persona.id_number }}')">
+                      <i class="fas fa-plane-arrival me-1"></i>Regreso de Vacaciones
+                    </button>
+                    <button class="btn btn-info text-white" {% if not esta_dentro or not permiso_activo %}disabled{% endif %}
+                            onclick="registrarMovimiento('salida_permiso', '{{ persona.id_number }}')">
+                      <i class="fas fa-clipboard-check me-1"></i>Salida con Permiso
+                    </button>
+                  </div>
+                  
+                  <!-- Notificaciones especiales -->
+                  {% if permiso_activo %}
+                  <div class="alert alert-warning mt-3 mb-0">
+                    <small>
+                      <strong>Permiso:</strong> {{ permiso_activo.motivo }}<br>
+                      <strong>Válido hasta:</strong> {{ permiso_activo.fecha_fin|date:"d/m/Y" }}
+                    </small>
+                  </div>
+                  {% endif %}
+                </div>
+              </div>
+              
+              <!-- Historial reciente -->
+              {% if historial %}
+              <div class="mt-4">
+                <h5 class="section-title mb-3">Últimos Movimientos</h5>
+                <div class="table-responsive">
+                  <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                      <tr>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Tipo</th>
+                        <th>Motivo</th>
+                        <th>Registrado por</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for reg in historial|slice:":5" %}
+                      <tr class="{% if reg.record_type == 'entrada' %}table-success{% else %}table-danger{% endif %}">
+                        <td>{{ reg.timestamp|date:"d/m/Y" }}</td>
+                        <td>{{ reg.timestamp|time:"H:i" }}</td>
+                        <td>
+                          {% if reg.record_type == 'entrada' %}
+                            <span class="badge bg-success">Entrada</span>
+                          {% else %}
+                            <span class="badge bg-danger">Salida</span>
+                          {% endif %}
+                        </td>
+                        <td>{{ reg.motivo|default:"---" }}</td>
+                        <td>{{ reg.recorded_by.username }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                <div class="text-end">
+                  <a href="{% url 'registros_detallados' %}?nombre={{ persona.id_number }}" class="btn btn-sm btn-outline-primary">
+                    Ver historial completo
+                  </a>
+                </div>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          {% elif error %}
+          <div class="alert alert-warning mt-3">
+            <i class="fas fa-exclamation-triangle me-2"></i>{{ error }}
+            
+            {% if cedula_busqueda %}
+            <div class="mt-3">
+              <button class="btn btn-info text-white" data-bs-toggle="modal" data-bs-target="#modalVisitante" 
+                      onclick="preCargarCedula('{{ cedula_busqueda }}')">
+                <i class="fas fa-user-plus me-1"></i>Registrar como Visitante
+              </button>
+            </div>
+            {% endif %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      <!-- Actualizar layout en dashboard_operador.html -->
+      <!-- Cambiar esta sección para tener visitantes programados y registrar nuevo visitante en columnas -->
+
+      <div class="tab-pane fade" id="visitantes" role="tabpanel">
+        <div class="row mb-4">
+          <!-- Dividir en dos columnas -->
+          <div class="col-md-6">
+            <h5 class="section-title mb-3">Visitantes Programados para Hoy</h5>
+            
+            {% if visitas_programadas %}
+            <div class="row">
+              {% for visita in visitas_programadas %}
+              <div class="col-12 mb-3">
+                <div class="card visitor-card h-100">
+                  <div class="card-header bg-warning text-dark">
+                    <h5 class="card-title mb-0">{{ visita.nombre }}</h5>
+                  </div>
+                  <div class="card-body">
+                    <div class="row">
+                      <div class="col-md-6">
+                        <p><strong>Cédula:</strong> {{ visita.identificacion }}</p>
+                        <p><strong>Hora:</strong> {{ visita.hora_programada|time:"H:i" }}</p>
+                        <p><strong>Motivo:</strong> {{ visita.motivo }}</p>
+                      </div>
+                      <div class="col-md-6">
+                        {% if visita.empresa %}
+                        <p><strong>Empresa:</strong> {{ visita.empresa }}</p>
+                        {% endif %}
+                        <p><strong>Área:</strong> {{ visita.area_visita }}</p>
+                        <p><strong>Autorizado por:</strong> {{ visita.autorizado_por }}</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="card-footer">
+                    <div class="btn-group w-100">
+                      <button class="btn btn-success" onclick="registrarVisitante('{{ visita.nombre }}', '{{ visita.identificacion }}', '{{ visita.area_visita }}', '{{ visita.autorizado_por }}', {{ visita.id }}, true)">
+                        <i class="fas fa-check me-1"></i>Registrar Entrada
+                      </button>
+                      <button class="btn btn-secondary" onclick="cancelarVisita({{ visita.id }})">
+                        <i class="fas fa-times me-1"></i>Cancelar
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+              <i class="fas fa-info-circle me-2"></i>No hay visitas programadas para hoy.
+            </div>
+            {% endif %}
+          </div>
+          
+          <div class="col-md-6">
+            <h5 class="section-title mb-3">Registrar Nuevo Visitante</h5>
+            <div class="card">
+              <div class="card-body">
+                <form id="formVisitante" method="post" action="{% url 'visitor_create' %}">
+                  {% csrf_token %}
+                  <div class="row">
+                    <div class="col-md-6">
+                      {{ form_visitante.nombre|as_crispy_field }}
+                    </div>
+                    <div class="col-md-6">
+                      {{ form_visitante.cedula|as_crispy_field }}
+                    </div>
+                  </div>
+                  <div class="row">
+                    <div class="col-md-6">
+                      {{ form_visitante.area_visita|as_crispy_field }}
+                    </div>
+                    <div class="col-md-6">
+                      {{ form_visitante.autorizado_por|as_crispy_field }}
+                    </div>
+                  </div>
+                  <div class="d-grid mt-3">
+                    <button type="submit" class="btn btn-primary">
+                      <i class="fas fa-save me-1"></i>Registrar Visitante
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+            
+            <!-- Sección de visitantes activos -->
+            <h5 class="section-title mb-3 mt-4">Visitantes Activos</h5>
+            <div id="visitantes-activos">
+              <!-- Aquí se cargarán dinámicamente los visitantes activos -->
+              {% if visitantes_activos %}
+                {% for visitante in visitantes_activos %}
+                <div class="card mb-3 border-success">
+                  <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                      <div>
+                        <h5 class="mb-1">{{ visitante.nombre }}</h5>
+                        <p class="mb-0 text-muted">{{ visitante.cedula }}</p>
+                        <small>{{ visitante.area_visita }} | Ingresó: {{ visitante.fecha|time:"H:i" }}</small>
+                      </div>
+                      <button class="btn btn-danger" onclick="registrarSalidaVisitante({{ visitante.id }})">
+                        <i class="fas fa-sign-out-alt me-1"></i>Registrar Salida
+                      </button>
+                    </div>
+                  </div>
+                </div>
+                {% endfor %}
+              {% else %}
+                <div class="alert alert-info">
+                  <i class="fas fa-info-circle me-2"></i>No hay visitantes activos en este momento.
+                </div>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      </div>
+      <!--Fin de Registro de visitantes-->
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Marcación Rápida -->
+<div class="modal fade" id="modalMarcacionRapida" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-clock me-2"></i><span id="tituloModalMarcacion">Marcación Rápida</span>
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="formMarcacionRapida">
+          <div class="mb-3">
+            <label for="cedula-rapida" class="form-label">Número de Cédula:</label>
+            <input type="text" class="form-control" id="cedula-rapida" placeholder="Ingrese el número de cédula" required>
+          </div>
+          <div class="mb-3">
+            <label for="motivo-rapida" class="form-label">Motivo:</label>
+            <input type="text" class="form-control" id="motivo-rapida" placeholder="Motivo">
+          </div>
+          <input type="hidden" id="tipo-marcacion" value="entrada">
+          <div id="resultado-marcacion"></div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary mt-2">
+              <i class="fas fa-check-circle me-1"></i>Registrar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Marcación Automática -->
+<div class="modal fade" id="modalMarcacionAuto" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-magic me-2"></i>Marcación Automática
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info">
+          <i class="fas fa-info-circle me-2"></i>El sistema determinará automáticamente si debe registrar una <strong>entrada</strong> o <strong>salida</strong> según el estado actual de la persona.
+        </div>
+        <form id="formMarcacionAuto">
+          <div class="mb-3">
+            <label for="cedula-auto" class="form-label">Número de Cédula:</label>
+            <input type="text" class="form-control" id="cedula-auto" placeholder="Ingrese el número de cédula" required>
+          </div>
+          <div class="mb-3">
+            <label for="motivo-auto" class="form-label">Motivo (opcional):</label>
+            <input type="text" class="form-control" id="motivo-auto" placeholder="Motivo">
+          </div>
+          <div id="resultado-marcacion-auto"></div>
+          <div class="d-grid">
+            <button type="submit" class="btn btn-primary mt-2">
+              <i class="fas fa-check-circle me-1"></i>Registrar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Visitante -->
+<div class="modal fade" id="modalVisitante" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-user-plus me-2"></i>Registrar Visitante
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form id="modalFormVisitante" method="post" action="{% url 'visitor_create' %}">
+          {% csrf_token %}
+          <div class="row">
+            <div class="col-md-6">
+              {{ form_visitante.nombre|as_crispy_field }}
+            </div>
+            <div class="col-md-6">
+              {{ form_visitante.cedula|as_crispy_field }}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              {{ form_visitante.area_visita|as_crispy_field }}
+            </div>
+            <div class="col-md-6">
+              {{ form_visitante.autorizado_por|as_crispy_field }}
+            </div>
+          </div>
+          <div class="d-grid mt-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save me-1"></i>Guardar
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal para Escaneo de QR Mejorado -->
+<div class="modal fade" id="modalQR" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-dark text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-qrcode me-2"></i>Escaneo de Código QR
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <!-- Estado de permisos y cámaras -->
+        <div id="camera-status-alert" class="alert alert-info mb-3" style="display:none;">
+          <i class="fas fa-info-circle me-2"></i>
+          <span id="camera-status-text">Detectando cámaras...</span>
+        </div>
+
+        <div class="row">
+          <div class="col-lg-8">
+            <div class="card mb-3">
+              <div class="card-header bg-primary text-white">
+                <div class="d-flex justify-content-between align-items-center">
+                  <h6 class="mb-0"><i class="fas fa-video me-2"></i>Capturas de Cámara</h6>
+                  <span id="camera-indicator" class="badge bg-warning">Inactivo</span>
+                </div>
+              </div>
+              <div class="card-body text-center p-2">
+                <div id="reader" style="width: 100%; min-height: 320px; border: 2px solid #ddd; border-radius: 5px; background-color: #f0f0f0; position: relative;"></div>
+                
+                <!-- Controles de cámara -->
+                <div class="mt-3 d-grid gap-2">
+                  <!-- Selector de cámara (visible solo si hay múltiples) -->
+                  <div id="camera-select-container" style="display:none;">
+                    <select id="camera-select" class="form-select form-select-sm mb-2">
+                      <option value="">Seleccionar cámara</option>
+                    </select>
+                  </div>
+
+                  <!-- Selector de facings (frontal/trasera para móviles) -->
+                  <div id="facing-mode-container" class="btn-group btn-group-sm mb-2" role="group" style="display:none;">
+                    <input type="radio" class="btn-check" name="facing-mode" id="facing-auto" value="auto" checked>
+                    <label class="btn btn-outline-secondary" for="facing-auto">Auto</label>
+                    <input type="radio" class="btn-check" name="facing-mode" id="facing-user" value="user">
+                    <label class="btn btn-outline-secondary" for="facing-user"><i class="fas fa-selfie me-1"></i>Frontal</label>
+                    <input type="radio" class="btn-check" name="facing-mode" id="facing-environment" value="environment">
+                    <label class="btn btn-outline-secondary" for="facing-environment"><i class="fas fa-camera me-1"></i>Trasera</label>
+                  </div>
+
+                  <!-- Botones principales -->
+                  <div class="btn-group-vertical" role="group">
+                    <button id="start-scan-button" class="btn btn-success btn-lg">
+                      <i class="fas fa-play me-2"></i>Iniciar Escáner
+                    </button>
+                    <button id="stop-scan-button" class="btn btn-danger btn-lg" disabled style="display:none;">
+                      <i class="fas fa-stop me-2"></i>Detener Escáner
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Toggle para linterna (si está disponible) -->
+                <div id="torch-container" style="display:none;" class="mt-2">
+                  <button id="torch-button" class="btn btn-outline-warning btn-sm">
+                    <i class="fas fa-lightbulb me-1"></i>Encender Linterna
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Panel lateral con instrucciones y entrada manual -->
+          <div class="col-lg-4">
+            <!-- Instrucciones -->
+            <div class="card mb-3">
+              <div class="card-header bg-info text-white">
+                <h6 class="mb-0"><i class="fas fa-question-circle me-2"></i>Instrucciones</h6>
+              </div>
+              <div class="card-body small">
+                <ol class="ps-3 mb-2">
+                  <li>Presione "Iniciar Escáner"</li>
+                  <li>Apunte el QR hacia la cámara</li>
+                  <li>Espere la lectura automática</li>
+                  <li>El sistema registra entrada/salida automáticamente</li>
+                </ol>
+                <div class="alert alert-warning alert-sm mb-0 py-2">
+                  <i class="fas fa-lightbulb-exclamation me-1"></i>
+                  <small>En dispositivos móviles, permite acceso a cámara en los permisos del navegador.</small>
+                </div>
+              </div>
+            </div>
+
+            <!-- Entrada manual de cédula -->
+            <div class="card">
+              <div class="card-header bg-secondary text-white">
+                <h6 class="mb-0"><i class="fas fa-keyboard me-2"></i>Entrada Manual</h6>
+              </div>
+              <div class="card-body">
+                <div class="input-group input-group-sm mb-2">
+                  <span class="input-group-text"><i class="fas fa-id-card me-1"></i>Cédula</span>
+                  <input type="text" id="manual-cedula" class="form-control" placeholder="Ej: 1234567890" autocomplete="off">
+                  <button class="btn btn-primary" id="process-manual-cedula">
+                    <i class="fas fa-check"></i>
+                  </button>
+                </div>
+                <small class="form-text text-muted">
+                  <i class="fas fa-info-circle me-1"></i>O ingrese la cédula directamente y presione Enter
+                </small>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Resultado del escaneo -->
+        <div id="qr-result" class="mt-3"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_js %}
+{{ block.super }}
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="{% static 'js/qr-scanner.js' %}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Configurar modal de marcación rápida
+    const modalMarcacion = document.getElementById('modalMarcacionRapida');
+    if (modalMarcacion) {
+      modalMarcacion.addEventListener('show.bs.modal', function (event) {
+        const button = event.relatedTarget;
+        const tipo = button.getAttribute('data-tipo');
+        const tipoInput = document.getElementById('tipo-marcacion');
+        const tituloModal = document.getElementById('tituloModalMarcacion');
+        
+        tipoInput.value = tipo;
+        
+        if (tipo === 'entrada') {
+          tituloModal.textContent = 'Registro de Entrada';
+          modalMarcacion.querySelector('.modal-header').className = 'modal-header bg-success text-white';
+        } else {
+          tituloModal.textContent = 'Registro de Salida';
+          modalMarcacion.querySelector('.modal-header').className = 'modal-header bg-danger text-white';
+        }
+      });
+    }
+    
+    // Formulario de marcación rápida
+    const formMarcacion = document.getElementById('formMarcacionRapida');
+    if (formMarcacion) {
+      formMarcacion.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        const cedula = document.getElementById('cedula-rapida').value;
+        const tipo = document.getElementById('tipo-marcacion').value;
+        const motivo = document.getElementById('motivo-rapida').value;
+        const resultadoDiv = document.getElementById('resultado-marcacion');
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        resultadoDiv.innerHTML = '<div class="alert alert-info">Procesando...</div>';
+        
+        // Enviar solicitud
+        fetch("{% url 'marcacion_rapida' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": csrfToken,
+            "Content-Type": "application/x-www-form-urlencoded"
+          },
+          body: `cedula=${cedula}&tipo=${tipo}&motivo=${motivo}`
+        })
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === "ok") {
+            resultadoDiv.innerHTML = `
+              <div class="alert alert-success">
+                <strong>¡Éxito!</strong> ${data.message}
+              </div>`;
+            setTimeout(() => {
+              const modal = bootstrap.Modal.getInstance(document.getElementById('modalMarcacionRapida'));
+              modal.hide();
+              // Recargar si estamos en la página de la misma persona
+              if (window.location.search.includes(`cedula=${cedula}`)) {
+                location.reload();
+              }
+            }, 1500);
+          } else {
+            resultadoDiv.innerHTML = `
+              <div class="alert alert-danger">
+                <strong>Error:</strong> ${data.error}
+              </div>`;
+          }
+        })
+        .catch(error => {
+          resultadoDiv.innerHTML = `
+            <div class="alert alert-danger">
+              <strong>Error:</strong> Ocurrió un problema al procesar la solicitud.
+            </div>`;
+          console.error("Error:", error);
+        });
+      });
+    }
+    
+    // Este código detecta cuando un escáner físico envía datos rápidamente
+    let barcodeBuffer = '';
+    let barcodeTimeout = null;
+    const BARCODE_DELAY = 50; // Milisegundos entre caracteres para considerar entrada por escáner
+    
+    document.addEventListener('keydown', function(event) {
+      // Solo procesar si el modal QR está abierto
+      if (!$('#modalQR').hasClass('show')) return;
+      
+      // Detectar entrada por escáner (caracteres rápidos)
+      if (barcodeTimeout) clearTimeout(barcodeTimeout);
+      
+      if (event.key !== 'Enter') {
+        barcodeBuffer += event.key;
+      } else {
+        // Enter completa el escaneo
+        if (barcodeBuffer.length > 5) { // Asumimos que una cédula tiene más de 5 caracteres
+          procesarCedula(barcodeBuffer);
+        }
+        barcodeBuffer = '';
+        return;
+      }
+      
+      // Si no hay más entrada en X ms, no es un escáner
+      barcodeTimeout = setTimeout(() => {
+        barcodeBuffer = '';
+      }, BARCODE_DELAY);
+    });
+  });
+  
+  // Funciones existentes
+  function registrarMovimiento(tipo, cedula) {
+    if (!confirm(`¿Confirma que desea registrar este movimiento para el número de cédula ${cedula}?`)) {
+      return;
+    }
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    let url;
+    switch (tipo) {
+      case 'entrada':
+        url = "{% url 'registrar_ingreso' %}";
+        break;
+      case 'salida':
+        url = "{% url 'registrar_salida' %}";
+        break;
+      case 'regreso_vacaciones':
+        url = "{% url 'retorno_vacaciones' %}";
+        break;
+      case 'salida_permiso':
+        url = "{% url 'registrar_salida' %}";
+        break;
+    }
+    
+    fetch(url, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrfToken,
+        "Content-Type": "application/x-www-form-urlencoded"
+      },
+      body: `cedula=${cedula}`
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === "ok") {
+        alert("Movimiento registrado correctamente");
+        location.reload();
+      } else {
+        alert("Error: " + data.error);
+      }
+    })
+    .catch(error => {
+      console.error("Error:", error);
+      alert("Error al comunicar con el servidor");
+    });
+  }
+  
+  // Función para precargar cédula en el modal de visitante
+  function preCargarCedula(cedula) {
+    document.getElementById('id_cedula').value = cedula;
+  }
+  
+  // Función para registrar visitante desde visita programada
+  // Función mejorada para registrar visitante desde visita programada
+  function registrarVisitante(nombre, cedula, area_visita, autorizado_por, visita_id = null, registrarInmediatamente = false) {
+    // Si se debe registrar inmediatamente
+    if (registrarInmediatamente && visita_id) {
+      if (confirm(`¿Confirma el ingreso del visitante ${nombre}?`)) {
+        const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+        
+        // Datos del formulario
+        const formData = new FormData();
+        formData.append('nombre', nombre);
+        formData.append('cedula', cedula);
+        formData.append('area_visita', area_visita);
+        formData.append('autorizado_por', autorizado_por);
+        if (visita_id) {
+          formData.append('visita_programada_id', visita_id);
+        }
+        
+        // Enviar solicitud al servidor
+        fetch("{% url 'visitor_create' %}", {
+          method: "POST",
+          headers: {
+            "X-CSRFToken": csrfToken
+          },
+          body: formData
+        })
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Error en la respuesta del servidor');
+          }
+          return response.text();
+        })
+        .then(data => {
+          // Mostrar mensaje de éxito
+          alert("Visitante registrado correctamente");
+          // Recargar la página para actualizar la lista
+          location.reload();
+        })
+        .catch(error => {
+          console.error("Error:", error);
+          alert("Error al registrar visitante: " + error.message);
+        });
+      }
+      return;
+    }
+    
+    // Si no es inmediato, seguir con el flujo normal del modal
+    document.getElementById('id_nombre').value = nombre;
+    document.getElementById('id_cedula').value = cedula;
+    
+    if (area_visita) {
+      document.getElementById('id_area_visita').value = area_visita;
+    }
+    
+    if (autorizado_por) {
+      document.getElementById('id_autorizado_por').value = autorizado_por;
+    }
+    
+    // Si viene de una visita programada, almacenar el ID
+    if (visita_id) {
+      // Crear un campo oculto para el ID de la visita programada
+      const hiddenField = document.createElement('input');
+      hiddenField.type = 'hidden';
+      hiddenField.name = 'visita_programada_id';
+      hiddenField.value = visita_id;
+      
+      // Añadir el campo al formulario
+      const form = document.getElementById('modalFormVisitante');
+      form.appendChild(hiddenField);
+    }
+    
+    // Mostrar modal
+    new bootstrap.Modal(document.getElementById('modalVisitante')).show();
+  }
+
+  // Función para registrar salida de visitante
+  function registrarSalidaVisitante(visitante_id) {
+    if (confirm("¿Desea registrar la salida de este visitante?")) {
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+      
+      fetch("{% url 'visitor_exit' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrfToken,
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: `visitante_id=${visitante_id}`
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === "ok") {
+          alert("Salida de visitante registrada correctamente");
+          location.reload();
+        } else {
+          alert("Error: " + data.error);
+        }
+      })
+      .catch(error => {
+        console.error("Error:", error);
+        alert("Error al comunicar con el servidor");
+      });
+    }
+  }
+
+  // Añadir función para cancelar visita programada desde operador
+  function cancelarVisita(visitaId) {
+    if (!confirm("¿Está seguro que desea cancelar esta visita programada?")) {
+      return;
+    }
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch(`/admin-area/visitas-programadas/${visitaId}/cancelar/`, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrfToken,
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === "ok") {
+        alert("Visita cancelada correctamente");
+        location.reload();
+      } else {
+        alert("Error: " + data.error);
+      }
+    })
+    .catch(error => {
+      console.error("Error:", error);
+      alert("Error al comunicar con el servidor");
+    });
+  }
+  // Agregar este código JavaScript en la sección de script existente
+  // Formulario de marcación automática
+  const formMarcacionAuto = document.getElementById('formMarcacionAuto');
+  if (formMarcacionAuto) {
+    formMarcacionAuto.addEventListener('submit', function(e) {
+      e.preventDefault();
+      
+      const cedula = document.getElementById('cedula-auto').value;
+      const motivo = document.getElementById('motivo-auto').value;
+      const resultadoDiv = document.getElementById('resultado-marcacion-auto');
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+      
+      resultadoDiv.innerHTML = '<div class="alert alert-info">Procesando...</div>';
+      
+      // Enviar solicitud - usamos 'auto' como tipo
+      fetch("{% url 'marcacion_rapida' %}", {
+        method: "POST",
+        headers: {
+          "X-CSRFToken": csrfToken,
+          "Content-Type": "application/x-www-form-urlencoded"
+        },
+        body: `cedula=${cedula}&tipo=auto&motivo=${motivo}`
+      })
+      .then(response => response.json())
+      .then(data => {
+        if (data.status === "ok") {
+          // Determinar qué icono mostrar basado en el tipo de registro
+          const iconClass = data.tipo === 'entrada' ? 'fa-sign-in-alt' : 'fa-sign-out-alt';
+          const tipoTexto = data.tipo === 'entrada' ? 'Entrada' : 'Salida';
+          const bgColor = data.tipo === 'entrada' ? 'success' : 'danger';
+          
+          resultadoDiv.innerHTML = `
+            <div class="alert alert-${bgColor}">
+              <div class="d-flex align-items-center">
+                <div class="me-3">
+                  <i class="fas ${iconClass} fa-2x"></i>
+                </div>
+                <div>
+                  <strong>${data.message}</strong><br>
+                  <span>Tipo: ${tipoTexto}</span>
+                </div>
+              </div>
+            </div>`;
+          
+          setTimeout(() => {
+            const modal = bootstrap.Modal.getInstance(document.getElementById('modalMarcacionAuto'));
+            modal.hide();
+            // Recargar si estamos en la página de la misma persona
+            if (window.location.search.includes(`cedula=${cedula}`)) {
+              location.reload();
+            }
+          }, 1500);
+        } else {
+          resultadoDiv.innerHTML = `
+            <div class="alert alert-danger">
+              <strong>Error:</strong> ${data.error}
+            </div>`;
+        }
+      })
+      .catch(error => {
+        resultadoDiv.innerHTML = `
+          <div class="alert alert-danger">
+            <strong>Error:</strong> Ocurrió un problema al procesar la solicitud.
+          </div>`;
+        console.error("Error:", error);
+      });
+    });
+    
+    // Al abrir el modal, enfocar el campo de cédula
+    const modalMarcacionAuto = document.getElementById('modalMarcacionAuto');
+    if (modalMarcacionAuto) {
+      modalMarcacionAuto.addEventListener('shown.bs.modal', function () {
+        document.getElementById('cedula-auto').focus();
+      });
+    }
+  }
+</script>
+{% endblock %}

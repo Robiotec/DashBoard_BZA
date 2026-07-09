@@ -1,0 +1,327 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+{% block title %}Registros Diarios{% endblock %}
+
+{% block extra_css %}
+<style>
+  .filter-card {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+  }
+  .section-header {
+    border-radius: 4px;
+    padding: 10px 15px;
+  }
+  .section-header i {
+    width: 24px;
+    text-align: center;
+  }
+  .badge-tipo {
+    min-width: 80px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-calendar-alt me-2"></i>Registros Diarios
+  </h1>
+  <div>
+    <a href="{% url 'dashboard_operador' %}" class="btn btn-secondary ms-2">
+      <i class="fas fa-arrow-left me-1"></i>Volver al Dashboard
+    </a>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card filter-card mb-4">
+  <div class="card-body">
+    <form method="get" class="row align-items-end">
+      <div class="col-md-3 mb-2 mb-md-0">
+        <label for="fecha" class="form-label">Fecha</label>
+        <input type="date" id="fecha" name="fecha" class="form-control" value="{{ fecha }}">
+      </div>
+      
+      <div class="col-md-3 mb-2 mb-md-0">
+        <label for="tipo" class="form-label">Tipo de Registro</label>
+        <select id="tipo" name="tipo" class="form-select">
+          <option value="" {% if not tipo %}selected{% endif %}>Todos</option>
+          <option value="personal" {% if tipo == 'personal' %}selected{% endif %}>Personal</option>
+          <option value="visitante" {% if tipo == 'visitante' %}selected{% endif %}>Visitantes</option>
+        </select>
+      </div>
+      
+      <div class="col-md-3 mb-2 mb-md-0">
+        <label for="busqueda" class="form-label">Buscar</label>
+        <input type="text" id="busqueda" name="busqueda" class="form-control" 
+               placeholder="Nombre o cédula" value="{{ busqueda }}">
+      </div>
+      
+      <div class="col-md-3 mb-2 mb-md-0 d-flex">
+        <button type="submit" class="btn btn-primary me-2 flex-grow-1">
+          <i class="fas fa-filter me-1"></i> Filtrar
+        </button>
+        <a href="{% url 'registros_diarios' %}" class="btn btn-outline-secondary flex-grow-1">
+          <i class="fas fa-times me-1"></i> Limpiar
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Total Registros</h6>
+            <h2 class="mb-0">{{ total_registros }}</h2>
+          </div>
+          <i class="fas fa-clipboard-list fa-2x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Entradas</h6>
+            <h2 class="mb-0">{{ total_entradas }}</h2>
+          </div>
+          <i class="fas fa-sign-in-alt fa-2x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card bg-danger text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Salidas</h6>
+            <h2 class="mb-0">{{ total_salidas }}</h2>
+          </div>
+          <i class="fas fa-sign-out-alt fa-2x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <h6 class="card-title mb-0">Visitantes</h6>
+            <h2 class="mb-0">{{ total_visitantes }}</h2>
+          </div>
+          <i class="fas fa-user-friends fa-2x"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Registros de Personal -->
+{% if registros_limited %}
+<div class="alert alert-warning">
+  Se muestran hasta {{ registros_limit }} registros por sección. Use fecha y búsqueda para acotar resultados.
+</div>
+{% endif %}
+
+{% if registros_personal or not tipo or tipo == 'personal' %}
+<div class="card mb-4">
+  <div class="card-header section-header bg-primary text-white">
+    <i class="fas fa-users me-2"></i>Registro de Personal
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-striped mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Persona</th>
+            <th>Cédula</th>
+            <th>Tipo</th>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th>Motivo</th>
+            <th>Registrado por</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for r in registros_personal %}
+          <tr>
+            <td>{{ r.person.first_name }} {{ r.person.last_name }}</td>
+            <td>{{ r.person.id_number }}</td>
+            <td>
+              <span class="badge badge-tipo {% if r.record_type == 'entrada' %}bg-success{% else %}bg-danger{% endif %}">
+                {{ r.get_record_type_display }}
+              </span>
+            </td>
+            <td>{{ r.timestamp|date:"d/m/Y" }}</td>
+            <td>{{ r.timestamp|time:"H:i:s" }}</td>
+            <td>{{ r.motivo|default:"---" }}</td>
+            <td>{{ r.recorded_by.username }}</td>
+            <td>
+              <div class="btn-group btn-group-sm">
+                <a href="{% url 'dashboard_operador' %}?cedula={{ r.person.id_number }}" 
+                  class="btn btn-outline-primary" title="Ver detalles">
+                  <i class="fas fa-eye"></i>
+                </a>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center py-3">No hay registros de personal para esta fecha</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Registros de Visitantes -->
+{% if registros_visitantes or not tipo or tipo == 'visitante' %}
+<div class="card mb-4">
+  <div class="card-header section-header bg-info text-white">
+    <i class="fas fa-user-friends me-2"></i>Registro de Visitantes
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-striped mb-0">
+        <thead class="table-light">
+          <tr>
+            <th>Nombre</th>
+            <th>Cédula</th>
+            <th>Área de visita</th>
+            <th>Autorizado por</th>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in registros_visitantes %}
+          <tr class="table-info">
+            <td>{{ v.nombre }}</td>
+            <td>{{ v.cedula }}</td>
+            <td>{{ v.area_visita }}</td>
+            <td>{{ v.autorizado_por }}</td>
+            <td>{{ v.fecha|date:"d/m/Y" }}</td>
+            <td>{{ v.fecha|time:"H:i:s" }}</td>
+            <td>
+              <div class="btn-group btn-group-sm">
+                <button class="btn btn-outline-primary" title="Ver registro" 
+                        onclick="verDetalleVisitante('{{ v.nombre }}', '{{ v.cedula }}', '{{ v.area_visita }}', '{{ v.autorizado_por }}', '{{ v.fecha|date:"d/m/Y H:i:s" }}')">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="7" class="text-center py-3">No hay registros de visitantes para esta fecha</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Modal Detalles Visitante -->
+<div class="modal fade" id="modalDetalleVisitante" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-user-tag me-2"></i>Detalles del Visitante
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="card">
+          <div class="card-body">
+            <h5 id="detalle-nombre" class="card-title mb-3"></h5>
+            <p><strong>Cédula:</strong> <span id="detalle-cedula"></span></p>
+            <p><strong>Área de visita:</strong> <span id="detalle-area"></span></p>
+            <p><strong>Autorizado por:</strong> <span id="detalle-autorizado"></span></p>
+            <p><strong>Fecha y hora:</strong> <span id="detalle-fecha"></span></p>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de visitante -->
+<div class="modal fade" id="modalVisitante" tabindex="-1" aria-labelledby="modalVisitanteLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content border-info">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title" id="modalVisitanteLabel">
+          <i class="fas fa-user-plus me-2"></i>Nuevo Visitante
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Cerrar"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post" action="{% url 'visitor_create' %}">
+          {% csrf_token %}
+          {{ form_visitante|crispy }}
+          <input type="hidden" name="redirect_url" value="{% url 'registros_diarios' %}?fecha={{ fecha }}">
+          <div class="d-grid mt-3">
+            <button class="btn btn-info text-white" type="submit">
+              <i class="fas fa-save me-1"></i>Guardar Visitante
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Configurar fecha actual si no hay fecha seleccionada
+    const fechaInput = document.getElementById('fecha');
+    if (!fechaInput.value) {
+      const hoy = new Date().toISOString().split('T')[0];
+      fechaInput.value = hoy;
+    }
+    
+    // Si hay mensaje de éxito, mostrar y ocultar después de 3 segundos
+    const mensajeExito = document.getElementById('mensaje-exito');
+    if (mensajeExito) {
+      setTimeout(() => {
+        mensajeExito.style.display = 'none';
+      }, 3000);
+    }
+  });
+  
+  // Función para ver detalles de visitante
+  function verDetalleVisitante(nombre, cedula, area, autorizado, fecha) {
+    document.getElementById('detalle-nombre').textContent = nombre;
+    document.getElementById('detalle-cedula').textContent = cedula;
+    document.getElementById('detalle-area').textContent = area;
+    document.getElementById('detalle-autorizado').textContent = autorizado;
+    document.getElementById('detalle-fecha').textContent = fecha;
+    
+    const modal = new bootstrap.Modal(document.getElementById('modalDetalleVisitante'));
+    modal.show();
+  }
+</script>
+{% endblock %}

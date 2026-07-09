@@ -1,0 +1,397 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Jornada Mensual - RH{% endblock %}
+
+{% block extra_css %}
+<style>
+  :root {
+    --name-col-width: 300px;
+    --cargo-col-width: 220px;
+  }
+  .workday-toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #fff;
+    border-bottom: 1px solid #dee2e6;
+    padding: 0.75rem 0;
+  }
+  .workday-wrap {
+    max-height: calc(100vh - 230px);
+    overflow-y: auto;
+    overflow-x: hidden;
+    border: 1px solid #dee2e6;
+    background: #fff;
+    position: relative;
+    isolation: isolate;
+    display: grid;
+    grid-template-columns: calc(var(--name-col-width) + var(--cargo-col-width)) minmax(0, 1fr);
+    align-items: start;
+  }
+  .workday-person-pane {
+    position: sticky;
+    left: 0;
+    z-index: 50;
+    background: #fff;
+    box-shadow: 5px 0 0 #fff, 6px 0 0 #cfd4da;
+  }
+  .workday-scroll-pane {
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: visible;
+  }
+  .workday-person-table,
+  .workday-table {
+    border-collapse: separate;
+    border-spacing: 0;
+    font-size: 0.78rem;
+    table-layout: fixed;
+  }
+  .workday-person-table {
+    width: calc(var(--name-col-width) + var(--cargo-col-width));
+    min-width: calc(var(--name-col-width) + var(--cargo-col-width));
+  }
+  .workday-table {
+    width: 1390px;
+    min-width: 1390px;
+  }
+  .name-col {
+    width: var(--name-col-width);
+    min-width: var(--name-col-width);
+  }
+  .cargo-col {
+    width: var(--cargo-col-width);
+    min-width: var(--cargo-col-width);
+  }
+  .day-col {
+    width: 34px;
+    min-width: 34px;
+  }
+  .summary-col {
+    width: 56px;
+    min-width: 56px;
+  }
+  .workday-person-table th,
+  .workday-person-table td,
+  .workday-table th,
+  .workday-table td {
+    border-right: 1px solid #cfd4da;
+    border-bottom: 1px solid #cfd4da;
+    padding: 0.15rem;
+    text-align: center;
+    vertical-align: middle;
+    white-space: nowrap;
+  }
+  .workday-person-table thead th,
+  .workday-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 20;
+    background: #f8f9fa;
+  }
+  .workday-person-table thead th {
+    z-index: 60;
+  }
+  .workday-person-table tbody tr,
+  .workday-table tbody tr {
+    height: 42px;
+  }
+  .name-cell {
+    width: var(--name-col-width);
+    min-width: var(--name-col-width);
+    max-width: var(--name-col-width);
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    padding: 0.35rem 0.45rem !important;
+    text-align: left !important;
+  }
+  .cargo-cell {
+    width: var(--cargo-col-width);
+    min-width: var(--cargo-col-width);
+    max-width: var(--cargo-col-width);
+    white-space: nowrap !important;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.2;
+    padding: 0.35rem 0.45rem !important;
+    text-align: left !important;
+  }
+  .day-cell {
+    width: 34px;
+    min-width: 34px;
+  }
+  .workday-cell-control {
+    width: 31px;
+    height: 25px;
+    border: 0;
+    font-size: 0.7rem;
+    font-weight: 700;
+    text-align: center;
+    padding: 0;
+    line-height: 25px;
+    position: relative;
+    z-index: 1;
+    appearance: none;
+    display: inline-block;
+    cursor: pointer;
+    user-select: none;
+  }
+  .workday-cell-control:focus {
+    outline: 2px solid #0d6efd;
+    outline-offset: -2px;
+  }
+  .workday-empty { background: #fff; }
+  .workday-worked { background: #19e233; color: #000; }
+  .workday-free { background: #fff200; color: #000; }
+  .workday-vacation { background: #39a9ff; color: #000; }
+  .workday-permission { background: #ffb347; color: #000; }
+  .workday-absent { background: #f25f5c; color: #fff; }
+  .workday-late { background: #9b5de5; color: #fff; }
+  .legend-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    margin-right: 0.75rem;
+    margin-bottom: 0.35rem;
+  }
+  .legend-box {
+    width: 20px;
+    height: 16px;
+    border: 1px solid #adb5bd;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h1 class="mb-0"><i class="fas fa-calendar-days me-2"></i>Jornada Mensual</h1>
+    <a href="{% url 'dashboard_rrhh' %}" class="btn btn-secondary">
+      <i class="fas fa-arrow-left me-1"></i>Volver
+    </a>
+  </div>
+
+  <div class="workday-toolbar">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-2">
+        <label class="form-label">Mes</label>
+        <select name="month" class="form-select">
+          {% for number, name in month_options %}
+            <option value="{{ number }}" {% if number == month %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Año</label>
+        <select name="year" class="form-select">
+          {% for option_year in year_options %}
+            <option value="{{ option_year }}" {% if option_year == year %}selected{% endif %}>{{ option_year }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Área</label>
+        <select name="area" class="form-select">
+          <option value="">Todas</option>
+          {% for area in area_options %}
+            <option value="{{ area }}" {% if area == area_filter %}selected{% endif %}>{{ area }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-2">
+        <label class="form-label">Buscar</label>
+        <input type="text" name="q" class="form-control" placeholder="Cédula o nombre" value="{{ search }}">
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button class="btn btn-primary" type="submit">
+          <i class="fas fa-filter me-1"></i>Ver
+        </button>
+        <a href="{% url 'monthly_workday_template' %}?year={{ prev_year }}&month={{ prev_month }}{% if area_filter %}&area={{ area_filter|urlencode }}{% endif %}{% if search %}&q={{ search|urlencode }}{% endif %}" class="btn btn-outline-secondary">
+          <i class="fas fa-chevron-left"></i>
+        </a>
+        <a href="{% url 'monthly_workday_template' %}?year={{ next_year }}&month={{ next_month }}{% if area_filter %}&area={{ area_filter|urlencode }}{% endif %}{% if search %}&q={{ search|urlencode }}{% endif %}" class="btn btn-outline-secondary">
+          <i class="fas fa-chevron-right"></i>
+        </a>
+        <a href="{% url 'monthly_workday_template' %}?year={{ year }}&month={{ month }}{% if area_filter %}&area={{ area_filter|urlencode }}{% endif %}{% if search %}&q={{ search|urlencode }}{% endif %}&export=csv" class="btn btn-success">
+          <i class="fas fa-file-csv me-1"></i>CSV
+        </a>
+      </div>
+      <div class="col-md-3 text-md-end">
+        <strong>{{ month_name }} {{ year }}</strong>
+      </div>
+    </form>
+  </div>
+
+  <div class="my-3">
+    <span class="legend-badge"><span class="legend-box workday-worked"></span>1 Trabajó</span>
+    <span class="legend-badge"><span class="legend-box workday-free"></span>D Día libre</span>
+    <span class="legend-badge"><span class="legend-box workday-vacation"></span>V Vacaciones</span>
+    <span class="legend-badge"><span class="legend-box workday-permission"></span>P Permiso</span>
+    <span class="legend-badge"><span class="legend-box workday-absent"></span>F No trabajó</span>
+    <span class="legend-badge"><span class="legend-box workday-late"></span>T Regresó tarde</span>
+  </div>
+
+  <form method="post">
+    {% csrf_token %}
+    <div class="workday-wrap">
+      <div class="workday-person-pane">
+        <table class="table workday-person-table mb-0">
+          <colgroup>
+            <col class="name-col">
+            <col class="cargo-col">
+          </colgroup>
+          <thead>
+            <tr>
+              <th class="name-cell">Nombres</th>
+              <th class="cargo-cell">Cargo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                <td class="name-cell" title="{{ row.person.first_name }} {{ row.person.last_name }}">
+                  <strong>{{ row.person.first_name }} {{ row.person.last_name }}</strong><br>
+                  <small>{{ row.person.id_number }}</small>
+                </td>
+                <td class="cargo-cell" title="{{ row.person.cargo|default:'---' }}">{{ row.person.cargo|default:"---" }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="2" class="text-center py-4">
+                  No hay personal activo.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="workday-scroll-pane">
+        <table class="table workday-table mb-0">
+          <colgroup>
+            {% for day in days %}
+              <col class="day-col">
+            {% endfor %}
+            <col class="summary-col">
+            <col class="summary-col">
+            <col class="summary-col">
+            <col class="summary-col">
+            <col class="summary-col">
+            <col class="summary-col">
+          </colgroup>
+          <thead>
+            <tr>
+              {% for day in days %}
+                <th class="day-cell">
+                  <div>{{ day|date:"D"|slice:":1" }}</div>
+                  <div>{{ day.day }}</div>
+                </th>
+              {% endfor %}
+              <th>Trab.</th>
+              <th>Lib.</th>
+              <th>Vac.</th>
+              <th>Perm.</th>
+              <th>Falt.</th>
+              <th>Tarde</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for row in rows %}
+              <tr>
+                {% for cell in row.cells %}
+                  <td class="{{ cell.class }}" title="{{ cell.label }}{% if cell.is_inferred %} sugerido por registros existentes{% endif %}">
+                    <input type="hidden" name="status_{{ row.person.id }}_{{ cell.date|date:'Y-m-d' }}" value="{{ cell.status }}" data-workday-input>
+                    <button type="button" class="workday-cell-control {{ cell.class }}" data-workday-button data-status="{{ cell.status }}" title="Click para cambiar estado">
+                      {{ cell.short }}
+                    </button>
+                  </td>
+                {% endfor %}
+                <td>{{ row.worked_days }}</td>
+                <td>{{ row.free_days }}</td>
+                <td>{{ row.vacation_days }}</td>
+                <td>{{ row.permission_days }}</td>
+                <td>{{ row.absent_days }}</td>
+                <td>{{ row.late_days }}</td>
+              </tr>
+            {% empty %}
+              <tr>
+                <td colspan="{{ days|length|add:6 }}" class="text-center py-4">
+                  No hay jornadas para mostrar.
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-end mt-3">
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-save me-1"></i>Guardar plantilla
+      </button>
+    </div>
+  </form>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const statusClassMap = {
+      worked: 'workday-worked',
+      free: 'workday-free',
+      vacation: 'workday-vacation',
+      permission: 'workday-permission',
+      absent: 'workday-absent',
+      late_return: 'workday-late',
+      '': 'workday-empty'
+    };
+    const statusShortMap = {
+      worked: '1',
+      free: 'D',
+      vacation: 'V',
+      permission: 'P',
+      absent: 'F',
+      late_return: 'T',
+      '': ''
+    };
+    const statusOrder = ['', 'worked', 'free', 'vacation', 'permission', 'absent', 'late_return'];
+
+    function applyStatus(button, status) {
+      const td = button.closest('td');
+      const input = td.querySelector('[data-workday-input]');
+      Object.values(statusClassMap).forEach(function (className) {
+        td.classList.remove(className);
+        button.classList.remove(className);
+      });
+      const nextClass = statusClassMap[status] || 'workday-empty';
+      td.classList.add(nextClass);
+      button.classList.add(nextClass);
+      button.dataset.status = status;
+      button.textContent = statusShortMap[status] || '';
+      if (input) {
+        input.value = status;
+      }
+    }
+
+    document.querySelectorAll('[data-workday-button]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        const current = button.dataset.status || '';
+        const currentIndex = statusOrder.indexOf(current);
+        const nextStatus = statusOrder[(currentIndex + 1) % statusOrder.length];
+        applyStatus(button, nextStatus);
+      });
+
+      button.addEventListener('keydown', function (event) {
+        if (event.key !== 'Backspace' && event.key !== 'Delete') {
+          return;
+        }
+        event.preventDefault();
+        applyStatus(button, '');
+      });
+    });
+  })();
+</script>
+{% endblock %}

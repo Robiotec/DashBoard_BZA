@@ -1,0 +1,119 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Administrador Global{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h1><i class="fas fa-globe me-2"></i>Administrador Global</h1>
+    <div class="d-flex gap-2">
+      <a href="{% url 'global_person_create' %}" class="btn btn-info text-white">
+        <i class="fas fa-user-plus me-1"></i>Nueva Persona
+      </a>
+      <a href="{% url 'global_records' %}" class="btn btn-warning">
+        <i class="fas fa-clipboard-list me-1"></i>Registros
+      </a>
+      <a href="{% url 'organization_create' %}" class="btn btn-primary">
+        <i class="fas fa-building me-1"></i>Nueva Organización
+      </a>
+      <a href="{% url 'global_user_create' %}" class="btn btn-success">
+        <i class="fas fa-user-plus me-1"></i>Nuevo Usuario
+      </a>
+    </div>
+  </div>
+
+  <div class="row mb-4">
+    <div class="col-md-3">
+      <div class="card bg-primary text-white">
+        <div class="card-body">
+          <h5>Organizaciones</h5>
+          <h2>{{ total_organizaciones }}</h2>
+          <small>{{ organizaciones_activas }} activas</small>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-success text-white">
+        <div class="card-body">
+          <h5>Usuarios</h5>
+          <h2>{{ total_usuarios }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-info text-white">
+        <div class="card-body">
+          <h5>Personas</h5>
+          <h2>{{ total_personas }}</h2>
+        </div>
+      </div>
+    </div>
+    <div class="col-md-3">
+      <div class="card bg-warning text-dark">
+        <div class="card-body">
+          <h5>Fotografías</h5>
+          <h2>{{ total_personas_con_foto }}</h2>
+          <small>{{ total_personas_sin_foto }} sin foto</small>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card shadow-sm">
+    <div class="card-header bg-dark text-white">
+      <h5 class="mb-0"><i class="fas fa-building me-2"></i>Organizaciones</h5>
+    </div>
+    <div class="card-body">
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Identificador</th>
+              <th>Estado</th>
+              <th>Usuarios</th>
+              <th>Personas</th>
+              <th>Fotos</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for org in organizaciones %}
+              <tr>
+                <td>{{ org.name }}</td>
+                <td>{{ org.slug }}</td>
+                <td>
+                  {% if org.is_active %}
+                    <span class="badge bg-success">Activa</span>
+                  {% else %}
+                    <span class="badge bg-secondary">Inactiva</span>
+                  {% endif %}
+                </td>
+                <td>{{ org.user_count }}</td>
+                <td>{{ org.people_count }}</td>
+                <td>
+                  <span class="badge bg-success">{{ org.people_photo_count }} con</span>
+                  <span class="badge bg-secondary">{{ org.people_without_photo_count }} sin</span>
+                </td>
+                <td>
+                  <a href="{% url 'organization_detail' org.id %}" class="btn btn-sm btn-outline-dark">
+                    <i class="fas fa-eye me-1"></i>Ver
+                  </a>
+                  <a href="{% url 'global_person_list' %}?organization={{ org.id }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-users me-1"></i>Personas
+                  </a>
+                  <a href="{% url 'organization_update' org.id %}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-edit me-1"></i>Editar
+                  </a>
+                </td>
+              </tr>
+            {% empty %}
+              <tr><td colspan="7" class="text-center">No hay organizaciones registradas.</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

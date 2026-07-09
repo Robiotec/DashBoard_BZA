@@ -1,0 +1,254 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+
+{% block title %}Gestión de Vacaciones{% endblock %}
+
+{% block extra_css %}
+<style>
+  .filter-card {
+    background-color: #f8f9fa;
+    border-left: 4px solid #0d6efd;
+    margin-bottom: 20px;
+  }
+  .card-vacation {
+    transition: all 0.3s ease;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    overflow: hidden;
+  }
+  .card-vacation:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+  }
+  .status-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+  }
+  .status-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+  }
+  .status-active {
+    background-color: #28a745;
+  }
+  .status-future {
+    background-color: #17a2b8;
+  }
+  .status-past {
+    background-color: #6c757d;
+  }
+  .status-pending {
+    background-color: #ffc107;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-umbrella-beach me-2"></i>Gestión de Vacaciones</h1>
+  <div>
+    <a href="{% url 'vacation_create' %}" class="btn btn-primary">
+      <i class="fas fa-plus me-1"></i>Nueva Vacación
+    </a>
+    <a href="{% url 'dashboard_rrhh' %}" class="btn btn-secondary ms-2">
+      <i class="fas fa-arrow-left me-1"></i>Volver
+    </a>
+  </div>
+</div>
+
+<!-- Resumen y estadísticas -->
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body text-center">
+        <h6 class="text-uppercase">Personas de Vacaciones</h6>
+        <h3 class="mb-0">{{ total_activas }}</h3>
+        <small>Actualmente</small>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card bg-info text-white">
+      <div class="card-body text-center">
+        <h6 class="text-uppercase">Próximas Vacaciones</h6>
+        <h3 class="mb-0">{{ total_futuras }}</h3>
+        <small>Programadas</small>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card bg-warning text-dark">
+      <div class="card-body text-center">
+        <h6 class="text-uppercase">Pendientes de Control</h6>
+        <h3 class="mb-0">{{ total_pendientes_control }}</h3>
+        <small>Post-vacaciones</small>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3">
+    <div class="card bg-secondary text-white">
+      <div class="card-body text-center">
+        <h6 class="text-uppercase">Total de Registros</h6>
+        <h3 class="mb-0">{{ vacaciones.count }}</h3>
+        <small>{% if request.GET.estado %}{{ request.GET.estado }}{% else %}Todos{% endif %}</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card filter-card mb-4">
+  <div class="card-body">
+    <form method="get" action="{% url 'vacation_list' %}">
+      <div class="row">
+        <div class="col-md-4 mb-2">
+          <label for="estado" class="form-label">Estado:</label>
+          <select id="estado" name="estado" class="form-select">
+            <option value="todas" {% if request.GET.estado == 'todas' or not request.GET.estado %}selected{% endif %}>Todas</option>
+            <option value="activas" {% if request.GET.estado == 'activas' %}selected{% endif %}>Activas</option>
+            <option value="futuras" {% if request.GET.estado == 'futuras' %}selected{% endif %}>Programadas</option>
+            <option value="pasadas" {% if request.GET.estado == 'pasadas' %}selected{% endif %}>Finalizadas</option>
+            <option value="pendientes_control" {% if request.GET.estado == 'pendientes_control' %}selected{% endif %}>Pendientes de Control Médico</option>
+          </select>
+        </div>
+        
+        <div class="col-md-4 mb-2">
+          <label for="search" class="form-label">Buscar:</label>
+          <input type="text" id="search" name="search" class="form-control" placeholder="Nombre, apellido o cédula" value="{{ request.GET.search }}">
+        </div>
+        
+        <div class="col-md-4 mb-2 d-flex align-items-end">
+          <div class="d-grid gap-2 w-100">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-filter me-1"></i>Filtrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Lista de Vacaciones -->
+<div class="row">
+  {% for vacacion in vacaciones %}
+  <div class="col-md-4 mb-4">
+    <div class="card card-vacation">
+      <div class="card-header {% if vacacion.start_date <= today and vacacion.end_date >= today %}bg-success{% elif vacacion.start_date > today %}bg-info{% elif not vacacion.medical_checkup_done and vacacion.end_date < today %}bg-warning{% else %}bg-secondary{% endif %} text-white">
+        <h5 class="mb-0">{{ vacacion.person.first_name }} {{ vacacion.person.last_name }}</h5>
+        <span class="text-white-50">{{ vacacion.person.id_number }}</span>
+      </div>
+      <div class="card-body">
+        <div class="mb-3">
+          <p><strong>Cargo:</strong> {{ vacacion.person.cargo|default:"No especificado" }}</p>
+          <p><strong>Departamento:</strong> {{ vacacion.person.departamento|default:"No especificado" }}</p>
+          <p><strong>Área:</strong> {{ vacacion.person.area|default:"No especificado" }}</p>
+        </div>
+        
+        <div class="alert {% if vacacion.start_date <= today and vacacion.end_date >= today %}alert-success{% elif vacacion.start_date > today %}alert-info{% elif not vacacion.medical_checkup_done and vacacion.end_date < today %}alert-warning{% else %}alert-secondary{% endif %}">
+          <div class="d-flex justify-content-between align-items-start">
+            <div>
+              <strong>Período:</strong><br>
+              <i class="fas fa-calendar-day me-1"></i> {{ vacacion.start_date|date:"d/m/Y" }} - {{ vacacion.end_date|date:"d/m/Y" }}
+            </div>
+            <div>
+              <strong>Duración:</strong><br>
+              <i class="fas fa-clock me-1"></i> {{ vacacion.start_date|timesince:vacacion.end_date }}
+            </div>
+          </div>
+        </div>
+        
+        <div class="mt-3">
+          <p><strong>Aprobado por:</strong> {{ vacacion.approved_by.username }}</p>
+          <p>
+            <strong>Control médico:</strong> 
+            {% if vacacion.medical_checkup_done %}
+            <span class="badge bg-success">Completado</span>
+            {% else %}
+              {% if vacacion.end_date < today %}
+              <span class="badge bg-warning">Pendiente</span>
+              {% else %}
+              <span class="badge bg-secondary">No aplica aún</span>
+              {% endif %}
+            {% endif %}
+          </p>
+        </div>
+      </div>
+      <div class="card-footer">
+        <div class="d-flex justify-content-between">
+          <a href="{% url 'dashboard_rrhh' %}?cedula={{ vacacion.person.id_number }}" class="btn btn-sm btn-primary">
+            <i class="fas fa-user me-1"></i>Ver Perfil
+          </a>
+          
+          {% if vacacion.end_date >= today %}
+          <button class="btn btn-sm btn-danger" onclick="cancelarVacaciones({{ vacacion.id }})">
+            <i class="fas fa-times me-1"></i>Cancelar
+          </button>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="alert alert-info text-center">
+      <i class="fas fa-info-circle fa-2x mb-3"></i>
+      <h5>No se encontraron registros de vacaciones</h5>
+      <p>Intente con diferentes filtros o cree un nuevo registro de vacaciones.</p>
+      <a href="{% url 'vacation_create' %}" class="btn btn-primary mt-2">
+        <i class="fas fa-plus me-1"></i>Nueva Vacación
+      </a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function cancelarVacaciones(vacacionId) {
+    if (confirm('¿Está seguro que desea cancelar estas vacaciones?')) {
+      // Obtener token CSRF
+      const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+      
+      // Enviar solicitud para cancelar
+      fetch(`/rh/cancelar-vacaciones/${vacacionId}/`, {
+        method: 'POST',
+        headers: {
+          'X-CSRFToken': csrfToken,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        }
+      })
+      .then(response => {
+        if (!response.ok) {
+          throw new Error('Error en la respuesta del servidor');
+        }
+        return response.text();
+      })
+      .then(data => {
+        // Mostrar mensaje y recargar
+        alert('Vacaciones canceladas correctamente');
+        window.location.reload();
+      })
+      .catch(error => {
+        console.error('Error:', error);
+        alert('Error al cancelar vacaciones: ' + error.message);
+      });
+    }
+  }
+  
+  document.addEventListener('DOMContentLoaded', function() {
+    // Aplicar filtros al cambiar select
+    document.getElementById('estado').addEventListener('change', function() {
+      this.form.submit();
+    });
+  });
+</script>
+{% endblock %}

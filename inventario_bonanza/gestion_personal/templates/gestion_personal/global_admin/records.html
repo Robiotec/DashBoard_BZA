@@ -1,0 +1,178 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Registros Globales{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-clipboard-list me-2"></i>Registros Globales</h1>
+  <a href="{% url 'dashboard_global_admin' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-1"></i>Volver
+  </a>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="get" class="row g-2 align-items-end">
+      <div class="col-md-3">
+        <label for="fecha" class="form-label">Fecha</label>
+        <input type="date" id="fecha" name="fecha" class="form-control" value="{{ fecha }}">
+      </div>
+      <div class="col-md-3">
+        <label for="organization" class="form-label">Organización</label>
+        <select id="organization" name="organization" class="form-select">
+          <option value="">Todas las organizaciones</option>
+          {% for org in organizaciones %}
+            <option value="{{ org.id }}" {% if selected_organization == org.id|stringformat:"s" %}selected{% endif %}>{{ org.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-md-3">
+        <label for="cedula" class="form-label">Cédula</label>
+        <input type="text" id="cedula" name="cedula" class="form-control" placeholder="Buscar por cédula" value="{{ cedula }}">
+      </div>
+      <div class="col-md-3 d-flex gap-2">
+        <button class="btn btn-primary flex-fill" type="submit">
+          <i class="fas fa-filter me-1"></i>Filtrar
+        </button>
+        <a href="{% url 'global_records' %}" class="btn btn-outline-secondary">
+          <i class="fas fa-times"></i>
+        </a>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div class="row mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body">
+        <h5>Personal</h5>
+        <h2>{{ total_personal }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <h5>Entradas</h5>
+        <h2>{{ total_entradas }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-danger text-white">
+      <div class="card-body">
+        <h5>Salidas</h5>
+        <h2>{{ total_salidas }}</h2>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-warning text-dark">
+      <div class="card-body">
+        <h5>Vehículos</h5>
+        <h2>{{ total_vehiculos }}</h2>
+        <small>{{ vehiculos_dentro }} dentro</small>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0"><i class="fas fa-users me-2"></i>Ingresos y salidas de personas</h5>
+  </div>
+  {% if personal_limited %}
+  <div class="alert alert-warning mb-0 rounded-0">
+    Se muestran los primeros {{ registros_limit }} registros de personas. Use filtros para acotar la búsqueda.
+  </div>
+  {% endif %}
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Hora</th>
+            <th>Organización</th>
+            <th>Persona</th>
+            <th>Cédula</th>
+            <th>Tipo</th>
+            <th>Motivo</th>
+            <th>Registrado por</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for registro in registros_personal %}
+            <tr>
+              <td>{{ registro.timestamp|time:"H:i" }}</td>
+              <td>{{ registro.person.organization.name|default:"Sin organización" }}</td>
+              <td>{{ registro.person.first_name }} {{ registro.person.last_name }}</td>
+              <td>{{ registro.person.id_number }}</td>
+              <td>
+                <span class="badge {% if registro.record_type == 'entrada' %}bg-success{% else %}bg-danger{% endif %}">
+                  {{ registro.get_record_type_display }}
+                </span>
+              </td>
+              <td>{{ registro.motivo|default:"---" }}</td>
+              <td>{{ registro.recorded_by.username|default:"---" }}</td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="7" class="text-center py-3">No hay registros de personas para los filtros seleccionados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="card shadow-sm">
+  <div class="card-header bg-warning text-dark">
+    <h5 class="mb-0"><i class="fas fa-truck me-2"></i>Ingresos y salidas de vehículos</h5>
+  </div>
+  {% if vehiculos_limited %}
+  <div class="alert alert-warning mb-0 rounded-0">
+    Se muestran los primeros {{ registros_limit }} registros de vehículos. Use filtros para acotar la búsqueda.
+  </div>
+  {% endif %}
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover table-striped mb-0">
+        <thead>
+          <tr>
+            <th>Organización</th>
+            <th>Placa</th>
+            <th>Marca</th>
+            <th>Chofer</th>
+            <th>Cédula</th>
+            <th>Ingreso</th>
+            <th>Salida</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for vehicle in registros_vehiculos %}
+            <tr>
+              <td>{{ vehicle.organization.name|default:"Sin organización" }}</td>
+              <td>{{ vehicle.placa }}</td>
+              <td>{{ vehicle.marca|default:"---" }}</td>
+              <td>{{ vehicle.driver_name }}</td>
+              <td>{{ vehicle.driver_id_number|default:"---" }}</td>
+              <td>{{ vehicle.fecha_ingreso|date:"d/m/Y H:i" }}</td>
+              <td>{{ vehicle.fecha_salida|date:"d/m/Y H:i"|default:"Pendiente" }}</td>
+              <td>
+                {% if vehicle.esta_dentro %}
+                  <span class="badge bg-warning text-dark">Dentro</span>
+                {% else %}
+                  <span class="badge bg-success">Salió</span>
+                {% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="8" class="text-center py-3">No hay registros de vehículos para los filtros seleccionados.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,502 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Panel Médico - Control de Personal{% endblock %}
+
+{% block extra_css %}
+<style>
+  .medical-card {
+    border-left: 4px solid #17a2b8;
+    transition: all 0.3s ease;
+  }
+  .medical-card:hover {
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+  .alert-post-vacaciones {
+    border-left: 4px solid #ffc107;
+  }
+  .badge-status {
+    min-width: 80px;
+    display: inline-block;
+    text-align: center;
+  }
+  .btn-stethoscope {
+    transition: all 0.2s ease;
+  }
+  .btn-stethoscope:hover {
+    transform: translateY(-2px);
+  }
+  .search-card {
+    border-top: 4px solid #007bff;
+  }
+  .tab-pane {
+    padding: 15px 0;
+  }
+  .stat-card {
+    border-radius: 10px;
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  .stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 8px 15px rgba(0,0,0,0.1);
+  }
+  .stat-icon {
+    font-size: 3rem;
+    opacity: 0.7;
+    margin-bottom: 10px;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1>
+    <i class="fas fa-stethoscope me-2"></i>Panel de Control Médico
+  </h1>
+  <div>
+    <a href="{% url 'create_medical_consultation' %}" class="btn btn-success">
+      <i class="fas fa-plus-circle me-1"></i>Nueva Consulta
+    </a>
+    <a href="{% url 'person_list_medical' %}" class="btn btn-primary">
+      <i class="fas fa-users me-1"></i>Lista de Personal
+    </a>
+  </div>
+</div>
+
+<!-- Estadísticas -->
+<div class="row mb-4">
+  <div class="col-md-3 mb-3">
+    <div class="card stat-card bg-primary text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-users stat-icon"></i>
+        <h2 class="mt-2 mb-0">{{ total_personas|default:"0" }}</h2>
+        <p class="mb-0">Total Personal</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3 mb-3">
+    <div class="card stat-card bg-success text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-check-circle stat-icon"></i>
+        <h2 class="mt-2 mb-0">{{ aprobados_count|default:"0" }}</h2>
+        <p class="mb-0">Aprobados</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3 mb-3">
+    <div class="card stat-card bg-danger text-white">
+      <div class="card-body text-center">
+        <i class="fas fa-exclamation-circle stat-icon"></i>
+        <h2 class="mt-2 mb-0">{{ personas_pendientes.count|default:"0" }}</h2>
+        <p class="mb-0">Pendientes</p>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-3 mb-3">
+    <div class="card stat-card bg-warning text-dark">
+      <div class="card-body text-center">
+        <i class="fas fa-umbrella-beach stat-icon"></i>
+        <h2 class="mt-2 mb-0">{{ post_vacation.count|default:"0" }}</h2>
+        <p class="mb-0">Post-Vacaciones</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Buscador y sistema de alertas -->
+<div class="row mb-4">
+  <!-- Buscador por cédula -->
+  <div class="col-md-6">
+    <div class="card shadow-sm search-card">
+      <div class="card-body">
+        <h5 class="card-title mb-3"><i class="fas fa-search me-2"></i>Buscar Paciente</h5>
+        <form method="get" class="row g-3">
+          <div class="col-md-8">
+            <div class="input-group">
+              <input type="text" name="cedula" class="form-control" placeholder="Buscar por cédula" 
+                    value="{{ request.GET.cedula }}" required>
+              <button class="btn btn-primary" type="submit">
+                <i class="fas fa-search me-1"></i>Buscar
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alertas médicas -->
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="fas fa-bell me-2"></i>Alertas Prioritarias</h5>
+      </div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          {% if post_vacation %}
+            <li class="list-group-item d-flex justify-content-between align-items-center bg-light">
+              <div>
+                <i class="fas fa-umbrella-beach text-warning me-2"></i>
+                <strong>Personal pendiente de revisión post-vacaciones:</strong> {{ post_vacation.count }}
+              </div>
+              <a href="#seccion-post-vacaciones" class="btn btn-sm btn-warning">
+                <i class="fas fa-arrow-right me-1"></i>Ver
+              </a>
+            </li>
+          {% endif %}
+          
+          {% if personas_pendientes %}
+            <li class="list-group-item d-flex justify-content-between align-items-center">
+              <div>
+                <i class="fas fa-exclamation-circle text-danger me-2"></i>
+                <strong>Personal sin control médico:</strong> {{ personas_pendientes.count }}
+              </div>
+              <a href="#seccion-revisiones-pendientes" class="btn btn-sm btn-outline-danger">
+                <i class="fas fa-arrow-right me-1"></i>Ver
+              </a>
+            </li>
+          {% endif %}
+          
+          {% if not post_vacation and not personas_pendientes %}
+            <li class="list-group-item text-center py-3">
+              <i class="fas fa-check-circle text-success me-2"></i>
+              No hay alertas pendientes
+            </li>
+          {% endif %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if persona %}
+<!-- Datos de la persona encontrada -->
+<div class="card mb-4 shadow-sm medical-card">
+  <div class="card-header bg-info text-white">
+    <h5 class="mb-0"><i class="fas fa-user-md me-2"></i>Ficha Médica</h5>
+  </div>
+  <div class="card-body">
+    <div class="row">
+      <div class="col-md-3 text-center mb-3 mb-md-0">
+        {% if persona.foto %}
+          <img src="{{ persona.foto.url }}" class="img-fluid rounded" style="max-height: 200px;" alt="Foto">
+        {% else %}
+          <img src="{% static 'img/default.jpg' %}" class="img-fluid rounded" style="max-height: 200px;" alt="Sin foto">
+        {% endif %}
+      </div>
+      <div class="col-md-6">
+        <h4>{{ persona.first_name }} {{ persona.last_name }}</h4>
+        <p><strong>Cédula:</strong> {{ persona.id_number }}</p>
+        <p><strong>Cargo:</strong> {{ persona.cargo|default:"---" }}</p>
+        <p><strong>Área:</strong> {{ persona.area|default:"---" }}</p>
+        <p><strong>Departamento:</strong> {{ persona.departamento|default:"---" }}</p>
+        <p><strong>Contacto de emergencia:</strong> {{ persona.contacto_emergencia|default:"---" }}</p>
+        
+        <!-- Vacaciones activas -->
+        {% if vacaciones_activas %}
+        <div class="alert alert-info py-2 mb-0">
+          <i class="fas fa-umbrella-beach me-2"></i>
+          <strong>Vacaciones activas:</strong> {{ vacaciones_activas.start_date|date:"d/m/Y" }} a {{ vacaciones_activas.end_date|date:"d/m/Y" }}
+        </div>
+        {% endif %}
+      </div>
+      <div class="col-md-3">
+        <div class="card mb-3">
+          <div class="card-header {% if persona.medical_checkup %}bg-success{% else %}bg-danger{% endif %} text-white">
+            <h6 class="mb-0">Estado Médico</h6>
+          </div>
+          <div class="card-body">
+            {% if persona.medical_checkup %}
+              <div class="text-center">
+                <i class="fas fa-check-circle text-success fa-2x mb-2"></i>
+                <p class="mb-0">Revisión médica aprobada</p>
+                {% if persona.last_checkup_date %}
+                  <small class="text-muted">Última revisión: {{ persona.last_checkup_date|date:"d/m/Y" }}</small>
+                {% endif %}
+              </div>
+            {% else %}
+              <div class="text-center">
+                <i class="fas fa-exclamation-triangle text-danger fa-2x mb-2"></i>
+                <p class="mb-0">Revisión médica pendiente</p>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+        
+        <div class="d-grid gap-2">
+          <a href="{% url 'medical_checkup' persona.id %}" class="btn btn-primary btn-stethoscope">
+            <i class="fas fa-stethoscope me-1"></i>Realizar Control Médico
+          </a>
+          <a href="{% url 'create_medical_consultation' %}?person_id={{ persona.id }}" class="btn btn-success">
+            <i class="fas fa-notes-medical me-1"></i>Nueva Consulta
+          </a>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Historial médico en pestañas -->
+    <div class="mt-4">
+      <ul class="nav nav-tabs" id="historiaMedica" role="tablist">
+        <li class="nav-item" role="presentation">
+          <button class="nav-link active" id="comentarios-tab" data-bs-toggle="tab" data-bs-target="#comentarios" type="button" role="tab">
+            <i class="fas fa-comment-medical me-1"></i>Observaciones Médicas
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="historial-tab" data-bs-toggle="tab" data-bs-target="#historial" type="button" role="tab">
+            <i class="fas fa-history me-1"></i>Historial de Controles
+          </button>
+        </li>
+        <li class="nav-item" role="presentation">
+          <button class="nav-link" id="consultas-tab" data-bs-toggle="tab" data-bs-target="#consultas" type="button" role="tab">
+            <i class="fas fa-heartbeat me-1"></i>Consultas Médicas
+          </button>
+        </li>
+      </ul>
+      <div class="tab-content" id="historiaMedicaContent">
+        <div class="tab-pane fade show active" id="comentarios" role="tabpanel">
+          {% if persona.medical_comment %}
+            <div class="card mt-3">
+              <div class="card-body">
+                <h6 class="card-subtitle mb-2 text-muted">Última observación médica:</h6>
+                {{ persona.medical_comment|linebreaks }}
+              </div>
+            </div>
+          {% else %}
+            <div class="alert alert-light mt-3">
+              <i class="fas fa-info-circle me-2"></i>No hay observaciones médicas registradas.
+            </div>
+          {% endif %}
+        </div>
+        <div class="tab-pane fade" id="historial" role="tabpanel">
+          {% if historial_medico %}
+            <div class="table-responsive mt-3">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Tipo</th>
+                    <th>Doctor</th>
+                    <th>Comentarios</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for control in historial_medico %}
+                    <tr>
+                      <td>{{ control.check_date|date:"d/m/Y" }}</td>
+                      <td>
+                        {% if control.is_post_vacation %}
+                          <span class="badge bg-warning text-dark">Post-vacaciones</span>
+                        {% else %}
+                          <span class="badge bg-info">Control regular</span>
+                        {% endif %}
+                      </td>
+                      <td>{{ control.doctor.first_name }} {{ control.doctor.last_name }}</td>
+                      <td>
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalComentario{{ control.id }}">
+                          <i class="fas fa-eye me-1"></i>Ver
+                        </button>
+                        
+                        <!-- Modal para cada comentario -->
+                        <div class="modal fade" id="modalComentario{{ control.id }}" tabindex="-1">
+                          <div class="modal-dialog">
+                            <div class="modal-content">
+                              <div class="modal-header bg-info text-white">
+                                <h5 class="modal-title">Observaciones Médicas</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                              </div>
+                              <div class="modal-body">
+                                <p><strong>Fecha:</strong> {{ control.check_date|date:"d/m/Y" }}</p>
+                                <p><strong>Doctor:</strong> {{ control.doctor.first_name }} {{ control.doctor.last_name }}</p>
+                                <div class="card">
+                                  <div class="card-body">
+                                    {{ control.comments|linebreaks }}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="alert alert-light mt-3">
+              <i class="fas fa-info-circle me-2"></i>No hay historial médico registrado.
+            </div>
+          {% endif %}
+        </div>
+        <div class="tab-pane fade" id="consultas" role="tabpanel">
+          {% if consultas_medicas %}
+            <div class="table-responsive mt-3">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th>Fecha</th>
+                    <th>Doctor</th>
+                    <th>Peso</th>
+                    <th>Temperatura</th>
+                    <th>Presión</th>
+                    <th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for consulta in consultas_medicas %}
+                    <tr>
+                      <td>{{ consulta.fecha|date:"d/m/Y H:i" }}</td>
+                      <td>{{ consulta.doctor.first_name }} {{ consulta.doctor.last_name }}</td>
+                      <td>{{ consulta.peso|default:"--" }} {% if consulta.peso %}kg{% endif %}</td>
+                      <td>{{ consulta.temperatura|default:"--" }} {% if consulta.temperatura %}°C{% endif %}</td>
+                      <td>{{ consulta.presion|default:"--" }}</td>
+                      <td>
+                        <a href="{% url 'medical_consultation_detail' consulta.id %}" class="btn btn-sm btn-info text-white">
+                          <i class="fas fa-eye me-1"></i>Ver
+                        </a>
+                      </td>
+                    </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          {% else %}
+            <div class="alert alert-light mt-3">
+              <i class="fas fa-info-circle me-2"></i>No hay consultas médicas registradas.
+            </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% elif error %}
+<div class="alert alert-danger">{{ error }}</div>
+{% endif %}
+
+<!-- Lista de personal pendiente de revisión médica -->
+<div id="seccion-revisiones-pendientes" class="card mt-4">
+  <div class="card-header bg-danger text-white">
+    <h5 class="mb-0">
+      <i class="fas fa-exclamation-triangle me-2"></i>Personal Pendiente de Revisión Médica
+    </h5>
+  </div>
+  <div class="card-body">
+    {% if personas_pendientes %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Identificación</th>
+              <th>Cargo</th>
+              <th>Área</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for persona in personas_pendientes %}
+              <tr>
+                <td>{{ persona.first_name }} {{ persona.last_name }}</td>
+                <td>{{ persona.id_number }}</td>
+                <td>{{ persona.cargo|default:"---" }}</td>
+                <td>{{ persona.area|default:"---" }}</td>
+                <td>
+                  <a href="{% url 'medical_checkup' persona.id %}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-stethoscope me-1"></i>Realizar Revisión
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-success">
+        <i class="fas fa-check-circle me-2"></i>No hay revisiones generales pendientes.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Personal pendiente de revisión post-vacaciones -->
+<div id="seccion-post-vacaciones" class="card mt-4">
+  <div class="card-header bg-warning text-dark">
+    <h5 class="mb-0">
+      <i class="fas fa-umbrella-beach me-2"></i>Personal Pendiente de Revisión Post-Vacaciones
+    </h5>
+  </div>
+  <div class="card-body">
+    {% if post_vacation %}
+      <div class="table-responsive">
+        <table class="table table-hover">
+          <thead>
+            <tr>
+              <th>Nombre</th>
+              <th>Identificación</th>
+              <th>Fin de Vacaciones</th>
+              <th>Cargo</th>
+              <th>Área</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for vac in post_vacation %}
+              <tr class="table-warning">
+                <td>{{ vac.person.first_name }} {{ vac.person.last_name }}</td>
+                <td>{{ vac.person.id_number }}</td>
+                <td>{{ vac.end_date|date:"d/m/Y" }}</td>
+                <td>{{ vac.person.cargo|default:"---" }}</td>
+                <td>{{ vac.person.area|default:"---" }}</td>
+                <td>
+                  <a href="{% url 'medical_vacation_checkup' vac.id %}" class="btn btn-sm btn-warning">
+                    <i class="fas fa-stethoscope me-1"></i>Control Post-Vacaciones
+                  </a>
+                </td>
+              </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    {% else %}
+      <div class="alert alert-success">
+        <i class="fas fa-check-circle me-2"></i>No hay personal pendiente de revisión post-vacaciones.
+      </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Smooth scroll para las secciones
+    document.querySelectorAll('a[href^="#seccion"]').forEach(anchor => {
+      anchor.addEventListener('click', function (e) {
+        e.preventDefault();
+        
+        const target = document.querySelector(this.getAttribute('href'));
+        if (target) {
+          // Añadir efecto highlight temporal
+          target.classList.add('bg-light');
+          setTimeout(() => {
+            target.classList.remove('bg-light');
+          }, 2000);
+          
+          // Scroll to target
+          target.scrollIntoView({
+            behavior: 'smooth',
+            block: 'start'
+          });
+        }
+      });
+    });
+  });
+</script>
+{% endblock %}

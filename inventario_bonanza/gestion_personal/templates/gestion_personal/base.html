@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+{% load static %}
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Grupo Minero Bonanza{% endblock %}</title>
+    <link rel="icon" type="image/png" href="{% static 'img/logo.png' %}">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .sidebar {
+            min-height: calc(100vh - 56px);
+            background-color: #343a40;
+            color: white;
+        }
+        .sidebar a {
+            color: #ced4da;
+            text-decoration: none;
+            display: block;
+            padding: 10px 15px;
+        }
+        .sidebar a:hover {
+            color: white;
+            background-color: #495057;
+        }
+        .sidebar a.active {
+            color: white;
+            background-color: #0d6efd;
+        }
+        .sidebar .header {
+            padding: 15px;
+            font-weight: bold;
+            font-size: 1.2em;
+            background-color: #212529;
+        }
+        .logo-header {
+            max-height: 40px;
+            margin-right: 10px;
+        }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{% url 'dashboard' %}">
+                <img src="{% static 'img/logo.png' %}" alt="Logo" class="logo-header">
+                Grupo Minero Bonanza
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav ms-auto">
+                    {% if user.is_authenticated %}
+                        <li class="nav-item">
+                            <span class="nav-link">
+                                <i class="fas fa-user me-1"></i>{{ user.username }} 
+                                ({{ user.get_user_type_display }})
+                            </span>
+                        </li>
+                        <li class="nav-item">
+                            <form action="{% url 'logout' %}" method="post" class="d-inline">
+                                {% csrf_token %}
+                                <button type="submit" class="nav-link btn btn-link" style="background: none; border: none; padding: 8px 16px;">
+                                    <i class="fas fa-sign-out-alt me-1"></i>Cerrar sesión
+                                </button>
+                            </form>
+                        </li>
+                    {% else %}
+                        <li class="nav-item">
+                            <a class="nav-link" href="{% url 'login' %}">
+                                <i class="fas fa-sign-in-alt me-1"></i>Iniciar sesión
+                            </a>
+                        </li>
+                    {% endif %}
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid">
+        <div class="row">
+            {% if user.is_authenticated %}
+                <div class="col-md-2 p-0 sidebar">
+                    <div class="header">Panel de Control</div>
+                    {% if user.user_type == 'global_admin' %}
+                        <a href="{% url 'dashboard_global_admin' %}" class="{% if 'global/dashboard' in request.path %}active{% endif %}">
+                            <i class="fas fa-globe me-2"></i>Dashboard
+                        </a>
+                        <a href="{% url 'organization_list' %}" class="{% if 'global/organizaciones' in request.path %}active{% endif %}">
+                            <i class="fas fa-building me-2"></i>Organizaciones
+                        </a>
+                        <a href="{% url 'global_person_list' %}" class="{% if 'global/personas' in request.path %}active{% endif %}">
+                            <i class="fas fa-users me-2"></i>Personas
+                        </a>
+                        <a href="{% url 'global_records' %}" class="{% if 'global/registros' in request.path %}active{% endif %}">
+                            <i class="fas fa-clipboard-list me-2"></i>Registros
+                        </a>
+                        <a href="{% url 'global_plate_lookup' %}" class="{% if 'global/placas' in request.path %}active{% endif %}">
+                            <i class="fas fa-car me-2"></i>Consulta Placas
+                        </a>
+                        <a href="{% url 'global_person_lookup' %}" class="{% if 'global/consultas-personas' in request.path %}active{% endif %}">
+                            <i class="fas fa-id-card me-2"></i>Consulta Personas
+                        </a>
+                        <a href="{% url 'server_status_page' %}" class="{% if '/server/' in request.path %}active{% endif %}">
+                            <i class="fas fa-server me-2"></i>Servidor
+                        </a>
+                        <a href="{% url 'global_user_list' %}" class="{% if 'global/usuarios' in request.path %}active{% endif %}">
+                            <i class="fas fa-user-shield me-2"></i>Usuarios
+                        </a>
+                    {% elif user.user_type == 'medico' %}
+                        <a href="{% url 'dashboard_medico' %}" class="{% if request.path == '/medico/dashboard/' %}active{% endif %}">
+                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                        </a>
+                        <a href="{% url 'person_list_medical' %}" class="{% if 'medico/personas' in request.path %}active{% endif %}">
+                            <i class="fas fa-users me-2"></i>Pacientes
+                        </a>
+                        <a href="{% url 'create_medical_consultation' %}" class="{% if 'medico/consulta/nueva' in request.path %}active{% endif %}">
+                            <i class="fas fa-notes-medical me-2"></i>Nueva Consulta
+                        </a>
+                    {% elif user.user_type == 'rh' %}
+                        <a href="{% url 'dashboard_rrhh' %}" class="{% if 'rh/dashboard' in request.path %}active{% endif %}">
+                            <i class="fas fa-chart-line me-2"></i>Dashboard
+                        </a>
+                        <a href="{% url 'person_list' %}" class="{% if 'rh/personas' in request.path %}active{% endif %}">
+                            <i class="fas fa-users me-2"></i>Personas
+                        </a>
+                        <a href="{% url 'vacation_list' %}" class="{% if 'rh/vacaciones' in request.path %}active{% endif %}">
+                            <i class="fas fa-umbrella-beach me-2"></i>Vacaciones
+                        </a>
+                        <a href="{% url 'monthly_workday_template' %}" class="{% if 'rh/jornadas' in request.path %}active{% endif %}">
+                            <i class="fas fa-calendar-days me-2"></i>Jornada Mensual
+                        </a>
+                        <a href="{% url 'registrar_sancion' %}" class="{% if 'rh/sanciones' in request.path %}active{% endif %}">
+                            <i class="fas fa-gavel me-2"></i>Sanciones
+                        </a>
+                        <a href="{% url 'visitas_programadas' %}" class="{% if 'visitas-programadas' in request.path %}active{% endif %}">
+                            <i class="fas fa-calendar-check me-2"></i>Visitas Programadas
+                        </a>
+                        <a href="{% url 'import_excel' %}" class="{% if 'rh/importar-excel' in request.path %}active{% endif %}">
+                            <i class="fas fa-file-excel me-2"></i>Importar Personal
+                        </a>
+                        <a href="{% url 'export_attendance' %}" class="{% if 'rh/exportar-asistencia' in request.path %}active{% endif %}">
+                            <i class="fas fa-download me-2"></i>Exportar Reportes
+                        </a>
+                    {% elif user.user_type == 'operador' %}
+                        <a href="{% url 'dashboard_operador' %}" class="{% if request.path == '/operador/dashboard/' %}active{% endif %}">
+                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                        </a>
+                        <a href="{% url 'registros_diarios' %}" class="{% if 'operador/registros' in request.path %}active{% endif %}">
+                            <i class="fas fa-calendar-alt me-2"></i>Registros Diarios
+                        </a>
+                        <a href="{% url 'vehicle_create' %}" class="{% if 'operador/vehiculo/nuevo' in request.path %}active{% endif %}">
+                            <i class="fas fa-truck me-2"></i>Registrar Vehículo
+                        </a>
+                        <a href="{% url 'retorno_vacaciones' %}" class="{% if 'operador/retorno-vacaciones' in request.path %}active{% endif %}">
+                            <i class="fas fa-clipboard-check me-2"></i>Permisos y Vacaciones
+                        </a>
+                        <!--
+                        <button class="btn btn-dark" data-bs-toggle="modal" data-bs-target="#modalQR">
+                            <i class="fas fa-qrcode me-1"></i> Escanear QR
+                        </button>-->
+                          
+                    {% elif user.user_type == 'admin_mina' or user.user_type == 'admin_molino' %}
+                        <a href="{% url 'dashboard_admin' %}" class="{% if 'admin/dashboard' in request.path %}active{% endif %}">
+                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                        </a>
+                        <a href="{% url 'personal_area' %}" class="{% if 'admin/personal' in request.path %}active{% endif %}">
+                            <i class="fas fa-users me-2"></i>Personal del Área
+                        </a>
+                    {% elif user.user_type == 'seguridad_fisica' %}
+                        <a href="{% url 'dashboard_seguridad' %}" class="{% if 'seguridad/dashboard' in request.path %}active{% endif %}">
+                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                        </a>
+                        <a href="{% url 'registros_por_fecha' %}" class="{% if 'seguridad/registros' in request.path %}active{% endif %}">
+                            <i class="fas fa-clipboard-list me-2"></i>Registros por Fecha
+                        </a>
+                        <a href="{% url 'visitas_programadas' %}" class="{% if 'visitas-programadas' in request.path %}active{% endif %}">
+                            <i class="fas fa-calendar-check me-2"></i>Visitas Programadas
+                        </a>
+                    {% elif user.user_type == 'tecnico_seguridad' %}
+                        <a href="{% url 'dashboard_tecnico' %}" class="{% if 'tecnico/dashboard' in request.path %}active{% endif %}">
+                            <i class="fas fa-tachometer-alt me-2"></i>Dashboard
+                        </a>
+                    {% endif %}
+                </div>
+                <div class="col-md-10">
+                    <div class="content">
+                        {% if messages %}
+                            {% for message in messages %}
+                                <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                                    {{ message }}
+                                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                                </div>
+                            {% endfor %}
+                        {% endif %}
+                        {% block content %}{% endblock %}
+                    </div>
+                </div>
+            {% else %}
+                <div class="col-12 content">
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
+                                {{ message }}
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                    {% block content_not_authenticated %}{% endblock %}
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% block extra_js %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,36 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Iniciar Sesión - Inventario Bonanza{% endblock %}
+
+{% block content_not_authenticated %}
+<div class="row justify-content-center">
+    <div class="col-md-6">
+        <div class="card shadow mt-5">
+            <div class="card-header bg-dark text-white d-flex align-items-center gap-3">
+                <img src="{% static 'img/logo.png' %}" alt="Grupo Minero Bonanza" style="height: 42px; width: 42px; object-fit: contain;">
+                <div>
+                    <div class="fw-semibold">Grupo Minero Bonanza</div>
+                    <small class="text-white-50">Acceso al dashboard</small>
+                </div>
+            </div>
+            <div class="card-body">
+                <h4 class="mb-4 text-center">Iniciar Sesión</h4>
+                <form method="post">
+                    {% csrf_token %}
+                    {% if redirect_field_value or request.GET.next %}
+                        <input type="hidden" name="next" value="{{ redirect_field_value|default:request.GET.next }}">
+                    {% endif %}
+                    {{ form|crispy }}
+                    <div class="d-grid gap-2 mt-3">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-sign-in-alt me-2"></i>Iniciar Sesión
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

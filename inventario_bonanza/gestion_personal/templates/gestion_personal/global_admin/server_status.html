@@ -1,0 +1,254 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Estado del Servidor{% endblock %}
+
+{% block extra_css %}
+<style>
+  .server-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1rem;
+  }
+  .server-card {
+    border: 1px solid rgba(0,0,0,.08);
+    border-radius: 8px;
+    background: #fff;
+    padding: 1rem;
+    box-shadow: 0 .125rem .25rem rgba(0,0,0,.05);
+  }
+  .server-label {
+    color: #6c757d;
+    font-size: .86rem;
+  }
+  .server-value {
+    font-size: 1.65rem;
+    font-weight: 800;
+    line-height: 1.15;
+  }
+  .server-subvalue {
+    color: #495057;
+    font-size: .9rem;
+  }
+  .metric-bar {
+    height: 8px;
+    border-radius: 999px;
+    background: #e9ecef;
+    overflow: hidden;
+    margin-top: .75rem;
+  }
+  .metric-fill {
+    height: 100%;
+    width: 0%;
+    background: #198754;
+    transition: width .25s ease, background-color .25s ease;
+  }
+  .metric-fill.warn { background: #ffc107; }
+  .metric-fill.danger { background: #dc3545; }
+  .server-table th {
+    white-space: nowrap;
+  }
+  .server-code {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="mb-1"><i class="fas fa-server me-2"></i>Estado del servidor</h1>
+    <div class="text-muted">
+      <span data-field="host.hostname">{{ server_status.host.hostname }}</span>
+      · actualizado <span data-field="generated_at">{{ server_status.generated_at }}</span>
+    </div>
+  </div>
+  <a href="{% url 'server_status_api' %}" class="btn btn-outline-primary" target="_blank">
+    <i class="fas fa-code me-1"></i>API JSON
+  </a>
+</div>
+
+<div class="server-grid mb-4">
+  <div class="server-card">
+    <div class="server-label">CPU</div>
+    <div class="server-value"><span data-field="cpu.percent">{{ server_status.cpu.percent|default:"0" }}</span>%</div>
+    <div class="server-subvalue">
+      <span data-field="cpu.cores">{{ server_status.cpu.cores }}</span> cores · load
+      <span data-field="cpu.load_avg.1m">{{ server_status.cpu.load_avg.1m }}</span>,
+      <span data-field="cpu.load_avg.5m">{{ server_status.cpu.load_avg.5m }}</span>,
+      <span data-field="cpu.load_avg.15m">{{ server_status.cpu.load_avg.15m }}</span>
+    </div>
+    <div class="metric-bar"><div class="metric-fill" data-bar="cpu.percent"></div></div>
+  </div>
+  <div class="server-card">
+    <div class="server-label">RAM</div>
+    <div class="server-value"><span data-field="memory.percent">{{ server_status.memory.percent|default:"0" }}</span>%</div>
+    <div class="server-subvalue">
+      <span data-field="memory.used_human">{{ server_status.memory.used_human }}</span> usado ·
+      <span data-field="memory.available_human">{{ server_status.memory.available_human }}</span> libre
+    </div>
+    <div class="metric-bar"><div class="metric-fill" data-bar="memory.percent"></div></div>
+  </div>
+  <div class="server-card">
+    <div class="server-label">Disco principal</div>
+    <div class="server-value"><span data-field="disks.0.percent">{{ server_status.disks.0.percent|default:"0" }}</span>%</div>
+    <div class="server-subvalue">
+      <span data-field="disks.0.available_human">{{ server_status.disks.0.available_human }}</span> disponible
+    </div>
+    <div class="metric-bar"><div class="metric-fill" data-bar="disks.0.percent"></div></div>
+  </div>
+  <div class="server-card">
+    <div class="server-label">Base de datos</div>
+    <div class="server-value" data-field="database.message">{{ server_status.database.message }}</div>
+    <div class="server-subvalue">Estado: <span data-field="database.ok">{{ server_status.database.ok }}</span></div>
+  </div>
+  <div class="server-card">
+    <div class="server-label">Uptime</div>
+    <div class="server-value" data-field="uptime.human">{{ server_status.uptime.human }}</div>
+    <div class="server-subvalue">
+      Linux <span data-field="host.release">{{ server_status.host.release }}</span>
+    </div>
+  </div>
+  <div class="server-card">
+    <div class="server-label">Aplicación</div>
+    <div class="server-value"><span data-field="processes.gunicorn">{{ server_status.processes.gunicorn }}</span></div>
+    <div class="server-subvalue">procesos Gunicorn · Python <span data-field="host.python">{{ server_status.host.python }}</span></div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card shadow-sm">
+      <div class="card-header bg-dark text-white">
+        <i class="fas fa-hard-drive me-2"></i>Discos
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered server-table mb-0">
+          <thead>
+            <tr>
+              <th>Ruta</th>
+              <th>Uso</th>
+              <th>Usado</th>
+              <th>Disponible</th>
+              <th>Total</th>
+            </tr>
+          </thead>
+          <tbody id="diskRows"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card shadow-sm mb-4">
+      <div class="card-header bg-dark text-white">
+        <i class="fas fa-list-check me-2"></i>Colas
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered server-table mb-0">
+          <thead>
+            <tr>
+              <th>Cola</th>
+              <th>Pendiente</th>
+              <th>Ejecutando</th>
+              <th>Fallida</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Placas</td>
+              <td data-field="queues.plates.pending">{{ server_status.queues.plates.pending }}</td>
+              <td data-field="queues.plates.running">{{ server_status.queues.plates.running }}</td>
+              <td data-field="queues.plates.failed">{{ server_status.queues.plates.failed }}</td>
+            </tr>
+            <tr>
+              <td>Personas</td>
+              <td data-field="queues.people.pending">{{ server_status.queues.people.pending }}</td>
+              <td data-field="queues.people.running">{{ server_status.queues.people.running }}</td>
+              <td data-field="queues.people.failed">{{ server_status.queues.people.failed }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="card shadow-sm">
+      <div class="card-header bg-dark text-white">
+        <i class="fas fa-gears me-2"></i>Procesos
+      </div>
+      <div class="table-responsive">
+        <table class="table table-sm table-bordered server-table mb-0">
+          <tbody>
+            <tr><th>Gunicorn</th><td data-field="processes.gunicorn">{{ server_status.processes.gunicorn }}</td></tr>
+            <tr><th>Consulta personas</th><td data-field="processes.lookup_person">{{ server_status.processes.lookup_person }}</td></tr>
+            <tr><th>Drenador personas</th><td data-field="processes.drain_person_lookups">{{ server_status.processes.drain_person_lookups }}</td></tr>
+            <tr><th>Consulta placas</th><td data-field="processes.lookup_plate">{{ server_status.processes.lookup_plate }}</td></tr>
+            <tr><th>Drenador placas</th><td data-field="processes.drain_plate_lookups">{{ server_status.processes.drain_plate_lookups }}</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+{{ server_status|json_script:"server-status-data" }}
+<script>
+  const apiUrl = "{% url 'server_status_api' %}";
+
+  function getPath(obj, path) {
+    return path.split('.').reduce((value, key) => value && value[key] !== undefined ? value[key] : '', obj);
+  }
+
+  function setBar(name, value) {
+    document.querySelectorAll(`[data-bar="${name}"]`).forEach((bar) => {
+      const percent = Number(value || 0);
+      bar.style.width = `${Math.max(0, Math.min(100, percent))}%`;
+      bar.classList.toggle('danger', percent >= 90);
+      bar.classList.toggle('warn', percent >= 75 && percent < 90);
+    });
+  }
+
+  function renderDisks(disks) {
+    const tbody = document.getElementById('diskRows');
+    tbody.innerHTML = '';
+    (disks || []).forEach((disk) => {
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="server-code"></td>
+        <td></td>
+        <td></td>
+        <td></td>
+        <td></td>
+      `;
+      tr.children[0].textContent = disk.path || '';
+      tr.children[1].textContent = `${disk.percent ?? 0}%`;
+      tr.children[2].textContent = disk.used_human || '';
+      tr.children[3].textContent = disk.available_human || '';
+      tr.children[4].textContent = disk.total_human || '';
+      tbody.appendChild(tr);
+    });
+  }
+
+  function renderStatus(data) {
+    document.querySelectorAll('[data-field]').forEach((node) => {
+      const value = getPath(data, node.dataset.field);
+      node.textContent = value === true ? 'OK' : value === false ? 'ERROR' : value;
+    });
+    setBar('cpu.percent', getPath(data, 'cpu.percent'));
+    setBar('memory.percent', getPath(data, 'memory.percent'));
+    setBar('disks.0.percent', getPath(data, 'disks.0.percent'));
+    renderDisks(data.disks);
+  }
+
+  async function refreshStatus() {
+    try {
+      const response = await fetch(apiUrl, {headers: {'Accept': 'application/json'}});
+      if (!response.ok) return;
+      renderStatus(await response.json());
+    } catch (error) {
+      // La próxima ronda volverá a intentar.
+    }
+  }
+
+  renderStatus(JSON.parse(document.getElementById('server-status-data').textContent));
+  refreshStatus();
+  setInterval(refreshStatus, 5000);
+</script>
+{% endblock %}

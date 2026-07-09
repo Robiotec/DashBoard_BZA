@@ -1,0 +1,60 @@
+{% extends "gestion_personal/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Importar Personal desde Excel{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h1>
+        <i class="fas fa-file-excel me-2"></i>Importar Personal desde Excel
+    </h1>
+    <div>
+        <a href="{% url 'dashboard_rrhh' %}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left me-1"></i>Volver al Dashboard
+        </a>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card shadow-sm">
+            <div class="card-header bg-success text-white">
+                <h5 class="mb-0">
+                    <i class="fas fa-upload me-2"></i>Subir Archivo Excel
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="alert alert-info mb-4">
+                    <h5 class="alert-heading">Instrucciones</h5>
+                    <p>Prepare un archivo Excel con las siguientes columnas:</p>
+                    <ul>
+                        <li><strong>nombre</strong> (obligatorio): Nombre de la persona</li>
+                        <li><strong>apellido</strong> (obligatorio): Apellido de la persona</li>
+                        <li><strong>cedula</strong> (obligatorio): Número de identificación</li>
+                        <li><strong>cargo</strong> (opcional): Cargo de la persona</li>
+                        <li><strong>departamento</strong> (opcional): Departamento al que pertenece</li>
+                        <li><strong>area</strong> (opcional): Área de trabajo</li>
+                        <li><strong>email</strong> (opcional): Correo electrónico</li>
+                        <li><strong>telefono</strong> (opcional): Número de teléfono</li>
+                    </ul>
+                    <p>Se crearán o actualizarán registros según la cédula proporcionada.</p>
+                </div>
+                
+                <form method="post" enctype="multipart/form-data">
+                    {% csrf_token %}
+                    <div class="mb-3">
+                        <label for="excel_file" class="form-label">Archivo Excel</label>
+                        <input type="file" name="excel_file" id="excel_file" class="form-control" accept=".xlsx,.xls" required>
+                    </div>
+                    
+                    <div class="d-grid gap-2 mt-4">
+                        <button type="submit" class="btn btn-success">
+                            <i class="fas fa-upload me-1"></i>Importar Personal
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

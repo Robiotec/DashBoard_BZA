@@ -1,0 +1,229 @@
+{% extends "gestion_personal/base.html" %}
+{% load static %}
+{% load crispy_forms_tags %}
+
+{% block title %}Visitas Programadas - {{ area }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .card-visita {
+    transition: all 0.3s ease;
+    border-left: 4px solid #17a2b8;
+  }
+  .card-visita:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+  }
+  .card-visita.pendiente {
+    border-left-color: #ffc107;
+  }
+  .card-visita.completada {
+    border-left-color: #28a745;
+  }
+  .card-visita.cancelada {
+    border-left-color: #dc3545;
+  }
+  .form-container {
+    background-color: #f8f9fa;
+    border-radius: 5px;
+    border-left: 4px solid #17a2b8;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-calendar-check me-2"></i>Visitas Programadas</h1>
+  <div>
+    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNuevaVisita">
+      <i class="fas fa-plus me-1"></i>Nueva Visita
+    </button>
+    <a href="{% url 'dashboard_admin' %}" class="btn btn-secondary ms-2">
+      <i class="fas fa-arrow-left me-1"></i>Volver
+    </a>
+  </div>
+</div>
+
+<!-- Filtros -->
+<div class="card mb-4">
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0"><i class="fas fa-filter me-2"></i>Filtros</h5>
+  </div>
+  <div class="card-body">
+    <form method="get" action="{% url 'visitas_programadas' %}">
+      <div class="row">
+        <div class="col-md-4 mb-2">
+          <label for="fecha" class="form-label">Fecha:</label>
+          <input type="date" id="fecha" name="fecha" class="form-control" value="{{ request.GET.fecha }}">
+        </div>
+        <div class="col-md-4 mb-2">
+          <label for="status" class="form-label">Estado:</label>
+          <select id="status" name="status" class="form-select">
+            <option value="">Todos</option>
+            <option value="pendiente" {% if request.GET.status == 'pendiente' %}selected{% endif %}>Pendientes</option>
+            <option value="completada" {% if request.GET.status == 'completada' %}selected{% endif %}>Completadas</option>
+            <option value="cancelada" {% if request.GET.status == 'cancelada' %}selected{% endif %}>Canceladas</option>
+          </select>
+        </div>
+        <div class="col-md-4 mb-2 d-flex align-items-end">
+          <div class="d-grid gap-2 w-100">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-search me-1"></i>Filtrar
+            </button>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Lista de visitas programadas -->
+<div class="row">
+  {% for visita in visitas %}
+  <div class="col-md-4 mb-4">
+    <div class="card card-visita {{ visita.status }}">
+      <div class="card-header {% if visita.status == 'pendiente' %}bg-warning{% elif visita.status == 'completada' %}bg-success{% else %}bg-secondary{% endif %} text-{% if visita.status == 'pendiente' %}dark{% else %}white{% endif %}">
+        <div class="d-flex justify-content-between align-items-center">
+          <h5 class="mb-0">{{ visita.nombre }}</h5>
+          <span class="badge {% if visita.status == 'pendiente' %}bg-dark{% elif visita.status == 'completada' %}bg-light text-dark{% else %}bg-danger{% endif %}">
+            {{ visita.get_status_display }}
+          </span>
+        </div>
+      </div>
+      <div class="card-body">
+        <p><strong>Identificación:</strong> {{ visita.identificacion }}</p>
+        <p><strong>Fecha:</strong> {{ visita.fecha_programada|date:"d/m/Y" }}</p>
+        <p><strong>Hora:</strong> {{ visita.hora_programada|time:"H:i" }}</p>
+        <p><strong>Área:</strong> {{ visita.area_visita }}</p>
+        <p><strong>Motivo:</strong> {{ visita.motivo }}</p>
+        {% if visita.empresa %}
+        <p><strong>Empresa:</strong> {{ visita.empresa }}</p>
+        {% endif %}
+        {% if visita.notas %}
+        <div class="alert alert-info">
+          <small>{{ visita.notas }}</small>
+        </div>
+        {% endif %}
+      </div>
+      {% if visita.status == 'pendiente' %}
+      <div class="card-footer">
+        <div class="btn-group w-100">
+          <a href="{% url 'editar_visita_programada' visita.id %}" class="btn btn-primary btn-sm">
+            <i class="fas fa-edit me-1"></i>Editar
+          </a>
+          <button class="btn btn-danger btn-sm" onclick="cancelarVisita({{ visita.id }})">
+            <i class="fas fa-times-circle me-1"></i>Cancelar
+          </button>
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="alert alert-info">
+      <i class="fas fa-info-circle me-2"></i>No hay visitas programadas para los filtros seleccionados.
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Modal para nueva visita -->
+<div class="modal fade" id="modalNuevaVisita" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          <i class="fas fa-calendar-plus me-2"></i>Programar Nueva Visita
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form method="post" action="{% url 'visitas_programadas' %}">
+          {% csrf_token %}
+          <div class="row">
+            <div class="col-md-6">
+              {{ form.nombre|as_crispy_field }}
+            </div>
+            <div class="col-md-6">
+              {{ form.identificacion|as_crispy_field }}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              {{ form.empresa|as_crispy_field }}
+            </div>
+            <div class="col-md-6">
+              {{ form.motivo|as_crispy_field }}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              {{ form.fecha_programada|as_crispy_field }}
+            </div>
+            <div class="col-md-6">
+              {{ form.hora_programada|as_crispy_field }}
+            </div>
+          </div>
+          <div class="row">
+            <div class="col-md-6">
+              {{ form.area_visita|as_crispy_field }}
+            </div>
+            <div class="col-md-6">
+              {{ form.autorizado_por|as_crispy_field }}
+            </div>
+          </div>
+          {{ form.notas|as_crispy_field }}
+          <div class="d-grid mt-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="fas fa-save me-1"></i>Guardar Visita
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  function cancelarVisita(visitaId) {
+    if (!confirm("¿Está seguro que desea cancelar esta visita programada?")) {
+      return;
+    }
+    
+    const csrfToken = document.querySelector('[name=csrfmiddlewaretoken]').value;
+    
+    fetch(`/admin-area/visitas-programadas/${visitaId}/cancelar/`, {
+      method: "POST",
+      headers: {
+        "X-CSRFToken": csrfToken,
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    })
+    .then(response => response.json())
+    .then(data => {
+      if (data.status === "ok") {
+        alert("Visita cancelada correctamente");
+        location.reload();
+      } else {
+        alert("Error: " + data.error);
+      }
+    })
+    .catch(error => {
+      console.error("Error:", error);
+      alert("Error al comunicar con el servidor");
+    });
+  }
+  
+  document.addEventListener('DOMContentLoaded', function() {
+    // Establecer fecha mínima como hoy para nueva visita
+    const fechaInput = document.getElementById('id_fecha_programada');
+    if (fechaInput) {
+      const hoy = new Date().toISOString().split('T')[0];
+      fechaInput.min = hoy;
+    }
+  });
+</script>
+{% endblock %}

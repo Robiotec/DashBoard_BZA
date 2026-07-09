@@ -1,0 +1,38 @@
+# Environment and secrets
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+
+# Virtualenvs
+venv/
+.venv/
+
+# Django/runtime data
+db.sqlite3
+*/db.sqlite3
+logs/
+media/
+staticfiles/
+*/staticfiles/
+*/media/
+.codex_backups/
+MinIO/
+
+# Archives and build artifacts
+*.zip
+*.tar
+*.tar.gz
+*.tgz
+*.log
+*.lock
+
+# Editors and OS files
+.DS_Store
+Thumbs.db
