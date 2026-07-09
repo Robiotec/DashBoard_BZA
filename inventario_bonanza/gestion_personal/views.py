@@ -1913,6 +1913,25 @@ def _compact_person_line(person):
     )
 
 
+def _detailed_person_line(person, include_birthdate=False):
+    parts = [
+        _person_full_name(person),
+        f"Cedula: {person.id_number}",
+        f"Estado: {person.get_estado_display()}",
+        f"Area: {person.area or 'No especificada'}",
+        f"Cargo: {person.cargo or 'No especificado'}",
+        f"Telefono: {person.phone_number or 'No registrado'}",
+    ]
+    if include_birthdate:
+        parts.insert(1, f"Nacimiento: {_format_date(person.birth_date)}")
+    return " | ".join(parts)
+
+
+def _question_has_month(question):
+    normalized = question.lower()
+    return any(month_name in normalized for month_name in MONTH_NAME_TO_NUMBER)
+
+
 def _find_people_for_hr(user, question):
     queryset = person_queryset_for(user).select_related('organization')
     id_match = re.search(r'\b\d{6,13}\b', question)
@@ -1947,7 +1966,7 @@ def _birthday_answer(user, question):
         person_queryset_for(user)
         .filter(estado='activo')
         .exclude(birth_date__isnull=True)
-        .only('first_name', 'last_name', 'id_number', 'birth_date', 'area')
+        .only('first_name', 'last_name', 'id_number', 'birth_date', 'area', 'cargo', 'phone_number', 'estado')
         .order_by('birth_date__month', 'birth_date__day', 'last_name', 'first_name')
     )
     month_number = None
@@ -1960,13 +1979,14 @@ def _birthday_answer(user, question):
 
     if month_number:
         people = people.filter(birth_date__month=month_number)
-        if not people.exists():
+        count = people.count()
+        if not count:
             return f"No hay cumpleaneros activos registrados en {month_name}."
         lines = [
-            f"{person.birth_date.day:02d} - {_person_full_name(person)} ({person.area or 'sin area'})"
-            for person in people[:80]
+            f"{person.birth_date.day:02d} - {_detailed_person_line(person, include_birthdate=True)}"
+            for person in people
         ]
-        return f"Cumpleaneros de {month_name}:\n" + "\n".join(lines)
+        return f"Cumpleaneros de {month_name}\nTotal: {count}\n" + "\n".join(lines)
 
     counts = []
     for name, number in MONTH_NAME_TO_NUMBER.items():
@@ -1993,13 +2013,8 @@ def _area_answer(user, question):
         .order_by('last_name', 'first_name')
     )
     count = people.count()
-    if any(word in normalized for word in ['cuanto', 'cuantos', 'cantidad', 'total']):
-        return f"Hay {count} personas activas en {area.capitalize()}."
-
-    lines = [_compact_person_line(person) for person in people[:40]]
-    if count > 40:
-        lines.append(f"... y {count - 40} personas mas.")
-    return f"Personal activo de {area.capitalize()} ({count}):\n" + ("\n".join(lines) if lines else "Sin registros.")
+    lines = [_detailed_person_line(person) for person in people]
+    return f"Personal activo de {area.capitalize()}\nTotal: {count}\n" + ("\n".join(lines) if lines else "Sin registros.")
 
 
 def _person_answer(user, question):
@@ -2143,7 +2158,7 @@ def rh_chatbot_api(request):
         return JsonResponse({'ok': False, 'answer': 'Escribe una pregunta para consultar el personal.'}, status=400)
 
     normalized = question.lower()
-    if 'cumple' in normalized and not _find_people_for_hr(request.user, question):
+    if 'cumple' in normalized and _question_has_month(question):
         answer = _birthday_answer(request.user, question)
     else:
         answer = _area_answer(request.user, question) or _person_answer(request.user, question)
