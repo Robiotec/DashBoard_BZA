@@ -1,0 +1,114 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Cumpleañeros{% endblock %}
+
+{% block content %}
+<style>
+  .birthday-list-card {
+    max-width: 920px;
+  }
+
+  .birthday-person {
+    border-left: 5px solid #6c757d;
+    border-radius: 6px;
+    background: #fff;
+    padding: 0.8rem 1rem;
+  }
+
+  .birthday-person-mina {
+    border-left-color: #0d6efd;
+  }
+
+  .birthday-person-molino {
+    border-left-color: #198754;
+  }
+
+  .birthday-person-other {
+    border-left-color: #6c757d;
+  }
+
+  .person-name-mina {
+    color: #0d6efd;
+  }
+
+  .person-name-molino {
+    color: #198754;
+  }
+
+  .person-name-other {
+    color: #495057;
+  }
+
+  .birthday-day {
+    min-width: 3rem;
+    font-weight: 700;
+    text-align: center;
+  }
+</style>
+
+<div class="container-fluid py-3">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="mb-0"><i class="fas fa-cake-candles me-2"></i>Cumpleañeros</h1>
+    <a href="{% url 'dashboard_rrhh' %}" class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left me-1"></i>Dashboard
+    </a>
+  </div>
+
+  <div class="card shadow-sm birthday-list-card">
+    <div class="card-header bg-light">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-12 col-md-5">
+          <label for="monthSelect" class="form-label mb-1">Mes</label>
+          <select id="monthSelect" name="mes" class="form-select" onchange="this.form.submit()">
+            {% for number, name in month_choices %}
+              <option value="{{ number }}" {% if number == selected_month %}selected{% endif %}>{{ name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12 col-md-auto">
+          <button class="btn btn-primary" type="submit">
+            <i class="fas fa-search me-1"></i>Ver mes
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="card-body">
+      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+        <h5 class="mb-0">{{ selected_month_name }}</h5>
+        <div class="small text-muted">
+          <span class="me-3"><i class="fas fa-circle text-primary me-1"></i>Mina</span>
+          <span><i class="fas fa-circle text-success me-1"></i>Molino</span>
+        </div>
+      </div>
+
+      {% if birthdays %}
+        <div class="d-flex flex-column gap-2">
+          {% for item in birthdays %}
+            <div class="birthday-person {{ item.area_class }}">
+              <div class="d-flex align-items-center">
+                <div class="birthday-day">{{ item.day|stringformat:"02d" }}</div>
+                <div class="flex-grow-1">
+                  <div class="fw-bold {% if item.area == 'Mina' %}person-name-mina{% elif item.area == 'Molino' %}person-name-molino{% else %}person-name-other{% endif %}">
+                    {{ item.name }}
+                  </div>
+                  <div class="small text-muted">
+                    {{ item.person.id_number }} · {{ item.area }}{% if item.person.cargo %} · {{ item.person.cargo }}{% endif %}
+                  </div>
+                </div>
+                <a href="{% url 'person_update' item.person.id %}" class="btn btn-sm btn-outline-secondary">
+                  <i class="fas fa-edit me-1"></i>Ver
+                </a>
+              </div>
+            </div>
+          {% endfor %}
+        </div>
+      {% else %}
+        <div class="alert alert-light border mb-0">
+          No hay cumpleañeros registrados en {{ selected_month_name }}.
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}

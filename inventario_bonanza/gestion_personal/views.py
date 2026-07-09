@@ -1752,40 +1752,6 @@ def dashboard_rrhh(request):
     total_activos = personal_counts['activos']
     total_pasivos = personal_counts['pasivos']
 
-    month_names = [
-        "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio",
-        "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre",
-    ]
-    birthday_months = [
-        {"number": index + 1, "name": name, "people": []}
-        for index, name in enumerate(month_names)
-    ]
-    birthday_people = (
-        personal_qs
-        .filter(estado='activo')
-        .exclude(birth_date__isnull=True)
-        .only('first_name', 'last_name', 'birth_date', 'area')
-        .order_by('birth_date__month', 'birth_date__day', 'last_name', 'first_name')
-    )
-    for person in birthday_people:
-        area = (person.area or '').strip()
-        area_normalized = area.lower()
-        if 'molino' in area_normalized:
-            area_class = 'birthday-person-molino'
-            area_label = 'Molino'
-        elif 'mina' in area_normalized:
-            area_class = 'birthday-person-mina'
-            area_label = 'Mina'
-        else:
-            area_class = 'birthday-person-other'
-            area_label = area or 'Sin area'
-        birthday_months[person.birth_date.month - 1]["people"].append({
-            "name": f"{person.first_name} {person.last_name}",
-            "day": person.birth_date.day,
-            "area": area_label,
-            "area_class": area_class,
-        })
-    
     # Permisos y vacaciones activos
     personas_org = personal_qs
     permisos_activos = PermisoSalida.objects.filter(
@@ -1876,7 +1842,6 @@ def dashboard_rrhh(request):
         'total_personas': total_personas,
         'total_activos': total_activos,
         'total_pasivos': total_pasivos,
-        'birthday_months': birthday_months,
         'permisos_activos': permisos_activos,
         'permisos_activos_count': permisos_activos_count,
         'vacaciones_actuales_count': vacaciones_actuales_count,
@@ -1907,12 +1872,38 @@ MONTH_NAME_TO_NUMBER = {
 }
 
 
+MONTH_CHOICES = [
+    (1, "Enero"),
+    (2, "Febrero"),
+    (3, "Marzo"),
+    (4, "Abril"),
+    (5, "Mayo"),
+    (6, "Junio"),
+    (7, "Julio"),
+    (8, "Agosto"),
+    (9, "Septiembre"),
+    (10, "Octubre"),
+    (11, "Noviembre"),
+    (12, "Diciembre"),
+]
+
+
 def _format_date(value):
     return value.strftime('%d/%m/%Y') if value else 'No registrado'
 
 
 def _person_full_name(person):
     return f"{person.first_name} {person.last_name}".strip()
+
+
+def _area_badge(area):
+    clean_area = (area or '').strip()
+    normalized = clean_area.lower()
+    if 'molino' in normalized:
+        return 'Molino', 'birthday-person-molino'
+    if 'mina' in normalized:
+        return 'Mina', 'birthday-person-mina'
+    return clean_area or 'Sin area', 'birthday-person-other'
 
 
 def _compact_person_line(person):
@@ -2158,6 +2149,44 @@ def rh_chatbot_api(request):
         answer = _area_answer(request.user, question) or _person_answer(request.user, question)
 
     return JsonResponse({'ok': True, 'answer': answer})
+
+
+@login_required
+@user_passes_test(is_rh_or_global)
+def rh_birthdays(request):
+    today = timezone.now().date()
+    try:
+        selected_month = int(request.GET.get('mes', today.month))
+    except (TypeError, ValueError):
+        selected_month = today.month
+    if selected_month < 1 or selected_month > 12:
+        selected_month = today.month
+
+    people = (
+        person_queryset_for(request.user)
+        .filter(estado='activo', birth_date__month=selected_month)
+        .exclude(birth_date__isnull=True)
+        .only('first_name', 'last_name', 'id_number', 'birth_date', 'area', 'cargo')
+        .order_by('birth_date__day', 'last_name', 'first_name')
+    )
+    birthdays = []
+    for person in people:
+        area_label, area_class = _area_badge(person.area)
+        birthdays.append({
+            'person': person,
+            'name': _person_full_name(person),
+            'day': person.birth_date.day,
+            'area': area_label,
+            'area_class': area_class,
+        })
+
+    context = {
+        'month_choices': MONTH_CHOICES,
+        'selected_month': selected_month,
+        'selected_month_name': dict(MONTH_CHOICES)[selected_month],
+        'birthdays': birthdays,
+    }
+    return render(request, 'gestion_personal/rh/birthdays.html', context)
 
 @method_decorator(user_passes_test(is_rh_or_global), name='dispatch')
 class PersonListView(ListView):

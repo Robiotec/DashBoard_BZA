@@ -54,6 +54,7 @@ urlpatterns = [
     path('rh/dashboard/', views.dashboard_rrhh, name='dashboard_rrhh'),
     path('rh/asistente/', views.rh_chatbot, name='rh_chatbot'),
     path('rh/asistente/api/', views.rh_chatbot_api, name='rh_chatbot_api'),
+    path('rh/cumpleaneros/', views.rh_birthdays, name='rh_birthdays'),
     path('rh/personas/', views.PersonListView.as_view(), name='person_list'),
     path('rh/personas/nueva/', views.PersonCreateView.as_view(), name='person_create'),
     path('rh/personas/<int:pk>/editar/', views.PersonUpdateView.as_view(), name='person_update'),

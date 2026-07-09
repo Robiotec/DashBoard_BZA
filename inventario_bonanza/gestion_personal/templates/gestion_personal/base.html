@@ -127,6 +127,9 @@
                         <a href="{% url 'rh_chatbot' %}" class="{% if 'rh/asistente' in request.path %}active{% endif %}">
                             <i class="fas fa-comments me-2"></i>Asistente RRHH
                         </a>
+                        <a href="{% url 'rh_birthdays' %}" class="{% if 'rh/cumpleaneros' in request.path %}active{% endif %}">
+                            <i class="fas fa-cake-candles me-2"></i>Cumpleañeros
+                        </a>
                         <a href="{% url 'person_list' %}" class="{% if 'rh/personas' in request.path %}active{% endif %}">
                             <i class="fas fa-users me-2"></i>Personas
                         </a>
