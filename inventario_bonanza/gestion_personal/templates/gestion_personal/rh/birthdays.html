@@ -6,6 +6,31 @@
 <style>
   .birthday-list-card {
     max-width: 920px;
+    height: calc(100vh - 150px);
+    min-height: 520px;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .birthday-list-card .card-header {
+    flex: 0 0 auto;
+  }
+
+  .birthday-list-card .card-body {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .birthday-list-title {
+    flex: 0 0 auto;
+  }
+
+  .birthday-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-right: 0.35rem;
   }
 
   .birthday-person {
@@ -44,9 +69,16 @@
     font-weight: 700;
     text-align: center;
   }
+
+  @media (max-width: 767.98px) {
+    .birthday-list-card {
+      height: calc(100vh - 120px);
+      min-height: 460px;
+    }
+  }
 </style>
 
-<div class="container-fluid py-3">
+<div class="container-fluid py-3 overflow-hidden">
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <h1 class="mb-0"><i class="fas fa-cake-candles me-2"></i>Cumpleañeros</h1>
     <a href="{% url 'dashboard_rrhh' %}" class="btn btn-outline-secondary">
@@ -74,7 +106,7 @@
     </div>
 
     <div class="card-body">
-      <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+      <div class="birthday-list-title d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
         <h5 class="mb-0">{{ selected_month_name }}</h5>
         <div class="small text-muted">
           <span class="me-3"><i class="fas fa-circle text-primary me-1"></i>Mina</span>
@@ -83,7 +115,7 @@
       </div>
 
       {% if birthdays %}
-        <div class="d-flex flex-column gap-2">
+        <div class="birthday-scroll d-flex flex-column gap-2">
           {% for item in birthdays %}
             <div class="birthday-person {{ item.area_class }}">
               <div class="d-flex align-items-center">
