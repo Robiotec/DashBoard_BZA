@@ -31,6 +31,7 @@ import pandas as pd
 import xlwt
 import zipfile
 import mimetypes
+import re
 import requests
 
 from django.db import connection
@@ -1887,6 +1888,276 @@ def dashboard_rrhh(request):
     }
     
     return render(request, 'gestion_personal/rh/dashboard_rrhh.html', context)
+
+
+MONTH_NAME_TO_NUMBER = {
+    'enero': 1,
+    'febrero': 2,
+    'marzo': 3,
+    'abril': 4,
+    'mayo': 5,
+    'junio': 6,
+    'julio': 7,
+    'agosto': 8,
+    'septiembre': 9,
+    'setiembre': 9,
+    'octubre': 10,
+    'noviembre': 11,
+    'diciembre': 12,
+}
+
+
+def _format_date(value):
+    return value.strftime('%d/%m/%Y') if value else 'No registrado'
+
+
+def _person_full_name(person):
+    return f"{person.first_name} {person.last_name}".strip()
+
+
+def _compact_person_line(person):
+    return (
+        f"{_person_full_name(person)} - cedula {person.id_number} - "
+        f"{person.area or 'sin area'} - {person.estado}"
+    )
+
+
+def _find_people_for_hr(user, question):
+    queryset = person_queryset_for(user).select_related('organization')
+    id_match = re.search(r'\b\d{6,13}\b', question)
+    if id_match:
+        return list(queryset.filter(id_number__icontains=id_match.group(0))[:8])
+
+    cleaned = re.sub(r'[^a-zA-ZáéíóúÁÉÍÓÚñÑ\s]', ' ', question)
+    ignored_words = {
+        'persona', 'personal', 'trabajador', 'empleado', 'colaborador', 'cedula',
+        'estado', 'informacion', 'info', 'datos', 'consulta', 'consultar', 'sobre',
+        'de', 'del', 'la', 'el', 'los', 'las', 'un', 'una', 'por', 'favor', 'dame',
+        'muestra', 'busca', 'buscar', 'vacaciones', 'permisos', 'sanciones',
+        'asistencia', 'telefono', 'contacto', 'correo', 'cargo', 'area', 'departamento',
+        'cumpleanos', 'cumpleaños', 'nacimiento',
+    }
+    terms = [
+        term for term in cleaned.split()
+        if len(term) >= 3 and term.lower() not in ignored_words
+    ]
+    if not terms:
+        return []
+
+    filters = Q()
+    for term in terms:
+        filters |= Q(first_name__icontains=term) | Q(last_name__icontains=term)
+    return list(queryset.filter(filters).order_by('last_name', 'first_name')[:8])
+
+
+def _birthday_answer(user, question):
+    normalized = question.lower()
+    people = (
+        person_queryset_for(user)
+        .filter(estado='activo')
+        .exclude(birth_date__isnull=True)
+        .only('first_name', 'last_name', 'id_number', 'birth_date', 'area')
+        .order_by('birth_date__month', 'birth_date__day', 'last_name', 'first_name')
+    )
+    month_number = None
+    month_name = None
+    for name, number in MONTH_NAME_TO_NUMBER.items():
+        if name in normalized:
+            month_number = number
+            month_name = name.capitalize()
+            break
+
+    if month_number:
+        people = people.filter(birth_date__month=month_number)
+        if not people.exists():
+            return f"No hay cumpleaneros activos registrados en {month_name}."
+        lines = [
+            f"{person.birth_date.day:02d} - {_person_full_name(person)} ({person.area or 'sin area'})"
+            for person in people[:80]
+        ]
+        return f"Cumpleaneros de {month_name}:\n" + "\n".join(lines)
+
+    counts = []
+    for name, number in MONTH_NAME_TO_NUMBER.items():
+        if name == 'setiembre':
+            continue
+        count = people.filter(birth_date__month=number).count()
+        counts.append(f"{name.capitalize()}: {count}")
+    return "Resumen de cumpleaneros activos por mes:\n" + "\n".join(counts)
+
+
+def _area_answer(user, question):
+    normalized = question.lower()
+    area = None
+    if 'molino' in normalized:
+        area = 'molino'
+    elif 'mina' in normalized:
+        area = 'mina'
+    if not area:
+        return None
+
+    people = (
+        person_queryset_for(user)
+        .filter(estado='activo', area__icontains=area)
+        .order_by('last_name', 'first_name')
+    )
+    count = people.count()
+    if any(word in normalized for word in ['cuanto', 'cuantos', 'cantidad', 'total']):
+        return f"Hay {count} personas activas en {area.capitalize()}."
+
+    lines = [_compact_person_line(person) for person in people[:40]]
+    if count > 40:
+        lines.append(f"... y {count - 40} personas mas.")
+    return f"Personal activo de {area.capitalize()} ({count}):\n" + ("\n".join(lines) if lines else "Sin registros.")
+
+
+def _person_answer(user, question):
+    normalized = question.lower()
+    matches = _find_people_for_hr(user, question)
+    if not matches:
+        return (
+            "No encontre una persona con esa consulta. Puedes preguntarme por cedula "
+            "o por nombre, por ejemplo: estado de 0707020053, vacaciones de Wilmer."
+        )
+    if len(matches) > 1 and not re.search(r'\b\d{6,13}\b', question):
+        lines = [_compact_person_line(person) for person in matches]
+        return "Encontre varias coincidencias. Usa la cedula para precisar:\n" + "\n".join(lines)
+
+    person = matches[0]
+    today = timezone.now().date()
+    sections = []
+
+    wants_vacations = 'vacacion' in normalized or 'vacaciones' in normalized
+    wants_permissions = 'permiso' in normalized or 'permisos' in normalized
+    wants_sanctions = 'sancion' in normalized or 'sanciones' in normalized
+    wants_attendance = 'asistencia' in normalized or 'registro' in normalized or 'entrada' in normalized or 'salida' in normalized
+    wants_contact = any(word in normalized for word in ['telefono', 'contacto', 'correo', 'email'])
+    wants_birthday = 'cumple' in normalized or 'nacimiento' in normalized
+    wants_job = any(word in normalized for word in ['cargo', 'area', 'departamento', 'jornada'])
+    wants_status = 'estado' in normalized or 'activo' in normalized or 'pasivo' in normalized
+
+    if not any([wants_vacations, wants_permissions, wants_sanctions, wants_attendance, wants_contact, wants_birthday, wants_job, wants_status]):
+        sections.append(
+            "\n".join([
+                f"{_person_full_name(person)}",
+                f"Cedula: {person.id_number}",
+                f"Estado: {person.get_estado_display()}",
+                f"Area: {person.area or 'No especificada'}",
+                f"Cargo: {person.cargo or 'No especificado'}",
+                f"Departamento: {person.departamento or 'No especificado'}",
+                f"Ingreso: {_format_date(person.fecha_ingreso)}",
+            ])
+        )
+
+    if wants_status:
+        sections.append(
+            "\n".join([
+                f"Estado laboral de {_person_full_name(person)}: {person.get_estado_display()}",
+                f"Ingreso: {_format_date(person.fecha_ingreso)}",
+                f"Egreso: {_format_date(person.fecha_egreso)}",
+                f"Motivo de egreso: {person.motivo_egreso or 'No registrado'}",
+            ])
+        )
+
+    if wants_job:
+        sections.append(
+            "\n".join([
+                f"Datos laborales de {_person_full_name(person)}:",
+                f"Cargo: {person.cargo or 'No especificado'}",
+                f"Area: {person.area or 'No especificada'}",
+                f"Departamento: {person.departamento or 'No especificado'}",
+                f"Dias de jornada: {person.dias_jornada}",
+                f"Observaciones: {person.observaciones_jornada or 'Sin observaciones'}",
+            ])
+        )
+
+    if wants_contact:
+        sections.append(
+            "\n".join([
+                f"Contacto de {_person_full_name(person)}:",
+                f"Telefono: {person.phone_number or 'No registrado'}",
+                f"Correo: {person.email or 'No registrado'}",
+                f"Emergencia: {person.contacto_emergencia or 'No registrado'}",
+            ])
+        )
+
+    if wants_birthday:
+        sections.append(
+            f"{_person_full_name(person)} nacio el {_format_date(person.birth_date)}."
+        )
+
+    if wants_vacations:
+        vacations = VacationRecord.objects.filter(person=person).order_by('-start_date')[:5]
+        active = [vac for vac in vacations if vac.start_date <= today <= vac.end_date]
+        lines = [f"Vacaciones de {_person_full_name(person)}:"]
+        if active:
+            lines.append(f"Actualmente en vacaciones hasta {_format_date(active[0].end_date)}.")
+        if vacations:
+            lines.extend([f"- {_format_date(vac.start_date)} a {_format_date(vac.end_date)}" for vac in vacations])
+        else:
+            lines.append("No tiene vacaciones registradas.")
+        sections.append("\n".join(lines))
+
+    if wants_permissions:
+        permissions = PermisoSalida.objects.filter(person=person).order_by('-fecha_inicio')[:5]
+        lines = [f"Permisos de {_person_full_name(person)}:"]
+        if permissions:
+            lines.extend([
+                f"- {_format_date(permission.fecha_inicio)} a {_format_date(permission.fecha_fin)}: {permission.motivo}"
+                for permission in permissions
+            ])
+        else:
+            lines.append("No tiene permisos registrados.")
+        sections.append("\n".join(lines))
+
+    if wants_sanctions:
+        sanctions = Sanction.objects.filter(person=person).order_by('-fecha')[:5]
+        lines = [f"Sanciones de {_person_full_name(person)}:"]
+        if sanctions:
+            lines.extend([
+                f"- {_format_date(sanction.fecha)}: {sanction.tipo} - {sanction.descripcion}"
+                for sanction in sanctions
+            ])
+        else:
+            lines.append("No tiene sanciones registradas.")
+        sections.append("\n".join(lines))
+
+    if wants_attendance:
+        attendance = AttendanceRecord.objects.filter(person=person).order_by('-timestamp')[:8]
+        lines = [f"Ultimos registros de asistencia de {_person_full_name(person)}:"]
+        if attendance:
+            lines.extend([
+                f"- {record.timestamp.strftime('%d/%m/%Y %H:%M')}: {record.get_record_type_display()}"
+                for record in attendance
+            ])
+        else:
+            lines.append("No tiene registros de asistencia.")
+        sections.append("\n".join(lines))
+
+    return "\n\n".join(sections)
+
+
+@login_required
+@user_passes_test(is_rh_or_global)
+def rh_chatbot(request):
+    return render(request, 'gestion_personal/rh/chatbot.html')
+
+
+@login_required
+@user_passes_test(is_rh_or_global)
+@require_POST
+def rh_chatbot_api(request):
+    question = (request.POST.get('message') or '').strip()
+    if not question:
+        return JsonResponse({'ok': False, 'answer': 'Escribe una pregunta para consultar el personal.'}, status=400)
+
+    normalized = question.lower()
+    if 'cumple' in normalized and not _find_people_for_hr(request.user, question):
+        answer = _birthday_answer(request.user, question)
+    else:
+        answer = _area_answer(request.user, question) or _person_answer(request.user, question)
+
+    return JsonResponse({'ok': True, 'answer': answer})
 
 @method_decorator(user_passes_test(is_rh_or_global), name='dispatch')
 class PersonListView(ListView):

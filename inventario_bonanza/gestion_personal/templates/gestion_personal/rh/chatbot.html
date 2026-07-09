@@ -1,0 +1,185 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Asistente RRHH{% endblock %}
+
+{% block content %}
+<style>
+  .chat-shell {
+    max-width: 1040px;
+  }
+
+  .chat-panel {
+    border: 1px solid #dee2e6;
+    border-radius: 6px;
+    background: #fff;
+    min-height: 72vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .chat-history {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background: #f6f8fa;
+  }
+
+  .chat-message {
+    display: flex;
+    margin-bottom: 0.9rem;
+  }
+
+  .chat-message.user {
+    justify-content: flex-end;
+  }
+
+  .chat-bubble {
+    max-width: min(760px, 90%);
+    border-radius: 6px;
+    padding: 0.75rem 0.9rem;
+    white-space: pre-wrap;
+    line-height: 1.45;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .chat-message.user .chat-bubble {
+    background: #0d6efd;
+    color: #fff;
+  }
+
+  .chat-message.assistant .chat-bubble {
+    background: #fff;
+    color: #212529;
+    border: 1px solid #e9ecef;
+  }
+
+  .chat-input-zone {
+    border-top: 1px solid #dee2e6;
+    padding: 1rem;
+    background: #fff;
+  }
+
+  .prompt-chip {
+    border: 1px solid #ced4da;
+    border-radius: 999px;
+    background: #fff;
+    color: #495057;
+    padding: 0.35rem 0.7rem;
+    font-size: 0.85rem;
+  }
+
+  .prompt-chip:hover {
+    background: #e9ecef;
+  }
+</style>
+
+<div class="container-fluid chat-shell py-3">
+  <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+    <h1 class="mb-0"><i class="fas fa-comments me-2"></i>Asistente RRHH</h1>
+    <a href="{% url 'dashboard_rrhh' %}" class="btn btn-outline-secondary">
+      <i class="fas fa-arrow-left me-1"></i>Dashboard
+    </a>
+  </div>
+
+  <div class="chat-panel">
+    <div class="chat-history" id="chatHistory">
+      <div class="chat-message assistant">
+        <div class="chat-bubble">Listo para consultar informacion del personal.</div>
+      </div>
+    </div>
+
+    <div class="chat-input-zone">
+      <div class="d-flex flex-wrap gap-2 mb-3">
+        <button class="prompt-chip" type="button" data-prompt="estado de 0707020053">estado de 0707020053</button>
+        <button class="prompt-chip" type="button" data-prompt="vacaciones de Wilmer">vacaciones de Wilmer</button>
+        <button class="prompt-chip" type="button" data-prompt="cumpleaños julio">cumpleaños julio</button>
+        <button class="prompt-chip" type="button" data-prompt="cuantos activos en mina">cuantos activos en mina</button>
+      </div>
+      <form id="chatForm" method="post">
+        {% csrf_token %}
+        <div class="input-group">
+          <input
+            type="text"
+            id="chatInput"
+            name="message"
+            class="form-control"
+            autocomplete="off"
+            placeholder="Escribe una consulta..."
+            required
+          >
+          <button class="btn btn-primary" id="sendButton" type="submit">
+            <i class="fas fa-paper-plane me-1"></i>Enviar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const form = document.getElementById('chatForm');
+    const input = document.getElementById('chatInput');
+    const history = document.getElementById('chatHistory');
+    const sendButton = document.getElementById('sendButton');
+    const csrfToken = form.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    function addMessage(role, text) {
+      const row = document.createElement('div');
+      row.className = `chat-message ${role}`;
+      const bubble = document.createElement('div');
+      bubble.className = 'chat-bubble';
+      bubble.textContent = text;
+      row.appendChild(bubble);
+      history.appendChild(row);
+      history.scrollTop = history.scrollHeight;
+      return bubble;
+    }
+
+    async function sendMessage(message) {
+      addMessage('user', message);
+      const pending = addMessage('assistant', 'Consultando...');
+      sendButton.disabled = true;
+
+      try {
+        const body = new URLSearchParams();
+        body.append('message', message);
+        const response = await fetch("{% url 'rh_chatbot_api' %}", {
+          method: 'POST',
+          headers: {
+            'X-CSRFToken': csrfToken,
+            'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+          },
+          body,
+        });
+        const data = await response.json();
+        pending.textContent = data.answer || 'No pude procesar la consulta.';
+      } catch (error) {
+        pending.textContent = 'No pude conectar con el asistente.';
+      } finally {
+        sendButton.disabled = false;
+        input.focus();
+      }
+    }
+
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      const message = input.value.trim();
+      if (!message) {
+        return;
+      }
+      input.value = '';
+      sendMessage(message);
+    });
+
+    document.querySelectorAll('[data-prompt]').forEach(function (button) {
+      button.addEventListener('click', function () {
+        input.value = button.dataset.prompt;
+        input.focus();
+      });
+    });
+  })();
+</script>
+{% endblock %}
