@@ -64,6 +64,7 @@ from .services.people_import import import_people_dataframe
 from .services.person_search import resolve_person_search
 from .services.hr_dashboard import overview_metrics
 from .services.detailed_people import search_detailed_people
+from .services.record_metrics import attendance_counts, vehicle_counts
 
 
 PS_COMMAND = "/usr/bin/ps" if os.path.exists("/usr/bin/ps") else "/bin/ps"
@@ -706,11 +707,13 @@ def global_records(request):
             Q(chofer__last_name__icontains=person_search)
         )
 
-    total_personal = registros_personal.count()
-    total_entradas = registros_personal.filter(record_type='entrada').count()
-    total_salidas = registros_personal.filter(record_type='salida').count()
-    total_vehiculos = registros_vehiculos.count()
-    vehiculos_dentro = registros_vehiculos.filter(fecha_salida__isnull=True).count()
+    personal_counts = attendance_counts(registros_personal)
+    vehicle_counts_summary = vehicle_counts(registros_vehiculos)
+    total_personal = personal_counts['total']
+    total_entradas = personal_counts['entries']
+    total_salidas = personal_counts['exits']
+    total_vehiculos = vehicle_counts_summary['total']
+    vehiculos_dentro = vehicle_counts_summary['inside']
 
     registros_personal = registros_personal.order_by('-timestamp')[:RECORD_LIST_LIMIT]
     registros_vehiculos = registros_vehiculos.order_by('-fecha_ingreso')[:RECORD_LIST_LIMIT]
@@ -1453,8 +1456,9 @@ def registros_diarios(request):
         )
     
     # Conteos para estadísticas
-    total_entradas = registros_personal.filter(record_type='entrada').count()
-    total_salidas = registros_personal.filter(record_type='salida').count()
+    personal_counts = attendance_counts(registros_personal)
+    total_entradas = personal_counts['entries']
+    total_salidas = personal_counts['exits']
     total_visitantes = registros_visitantes.count()
     total_vehiculos = registros_vehiculos.count()
     total_registros = total_entradas + total_salidas + total_visitantes + total_vehiculos
