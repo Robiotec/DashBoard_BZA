@@ -4,6 +4,7 @@ from django.urls import reverse
 from datetime import date, timedelta
 from unittest.mock import patch
 import subprocess
+import pandas as pd
 
 from django.core.management import call_command
 from django.utils import timezone
@@ -16,6 +17,7 @@ from .models import (
     RoomAssignment, RoomOccupancyMovement, SocialBenefitCase, UpcomingEntry, VisitaProgramada,
 )
 from .services.hr_analytics import management_dashboard_context
+from .services.people_import import import_people_dataframe
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -389,6 +391,30 @@ class HRAnalyticsTests(TestCase):
         self.assertEqual(context['completed_activities'], 1)
         self.assertEqual(len(context['comparison']), 6)
         self.assertLessEqual(len(queries), 23)
+
+
+class PeopleImportTests(TestCase):
+    def test_import_updates_and_creates_people_in_batches(self):
+        organization = Organization.objects.create(name='Importación', slug='importacion')
+        existing = Person.objects.create(
+            first_name='Nombre anterior', last_name='Apellido anterior', id_number='0101010101',
+            birth_date=date(1990, 1, 1), gender='O', organization=organization,
+        )
+        dataframe = pd.DataFrame([
+            {'cedula': '0101010101', 'nombre': 'Elena', 'apellido': 'Vega', 'genero': 'F'},
+            {'cedula': '0202020202', 'nombre': 'Luis', 'apellido': 'Mora', 'departamento': 'Mina'},
+            {'cedula': '', 'nombre': 'Sin', 'apellido': 'Documento'},
+        ])
+
+        with CaptureQueriesContext(connection) as queries:
+            created, updated, errors = import_people_dataframe(dataframe, organization)
+
+        existing.refresh_from_db()
+        created_person = Person.objects.get(organization=organization, id_number='0202020202')
+        self.assertEqual((created, updated, errors), (1, 1, 1))
+        self.assertEqual((existing.first_name, existing.gender), ('Elena', 'F'))
+        self.assertEqual(created_person.departamento, 'Mina')
+        self.assertLessEqual(len(queries), 6)
 
 
 class PlateLookupQueueTests(TestCase):

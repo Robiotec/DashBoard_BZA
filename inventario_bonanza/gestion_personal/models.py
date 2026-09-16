@@ -3,13 +3,12 @@ from django.db import models
 from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from django.db.models.fields.files import ImageField
-from django.core.mail import send_mail
 from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
-from .services.notifications import send_telegram_message
+from .services.notifications import send_email_notification, send_telegram_message
 
 #Nuevos
 def person_photo_upload_to(instance, filename):
@@ -351,20 +350,10 @@ class AttendanceRecord(models.Model):
         if self.campamento_destino and self.reason == 'traslado':
             message += f"Destino: {self.campamento_destino}\n"
         
-        from_email = "registrodatos@grupominerobonanza.com"
-        recipient_list = ["sbarahona@grupominerobonanza.com"]
-        
-        # Obtener administradores y seguridad física
         admins = CustomUser.objects.filter(
             user_type__in=['admin_mina', 'admin_molino', 'seguridad_fisica']
         ).values_list('email', flat=True)
-        
-        recipient_list.extend(admins)
-        
-        try:
-            send_mail(subject, message, from_email, recipient_list, fail_silently=True)
-        except Exception as e:
-            print(f"Error al enviar correo: {e}")
+        send_email_notification(subject, message, ['sbarahona@grupominerobonanza.com', *admins])
 
         self.notify_telegram(message)
 
@@ -540,20 +529,10 @@ class VehicleRecord(models.Model):
             for pasajero in pasajeros:
                 message += f"- {pasajero.person.first_name} {pasajero.person.last_name}\n"
         
-        from_email = "registrodatos@grupominerobonanza.com"
-        recipient_list = ["sbarahona@grupominerobonanza.com"]
-        
-        # Obtener seguridad física
         security = CustomUser.objects.filter(
             user_type='seguridad_fisica'
         ).values_list('email', flat=True)
-        
-        recipient_list.extend(security)
-        
-        try:
-            send_mail(subject, message, from_email, recipient_list, fail_silently=True)
-        except Exception as e:
-            print(f"Error al enviar correo: {e}")
+        send_email_notification(subject, message, ['sbarahona@grupominerobonanza.com', *security])
     
     class Meta:
         verbose_name = "Registro de Vehículo"
@@ -749,20 +728,10 @@ class VisitorRecord(models.Model):
         Fecha y hora: {self.fecha.strftime('%d/%m/%Y %H:%M:%S')}
         """
         
-        from_email = "registrodatos@grupominerobonanza.com"
-        recipient_list = ["sbarahona@grupominerobonanza.com"]
-        
-        # Obtener seguridad física
         security = CustomUser.objects.filter(
             user_type='seguridad_fisica'
         ).values_list('email', flat=True)
-        
-        recipient_list.extend(security)
-        
-        try:
-            send_mail(subject, message, from_email, recipient_list, fail_silently=True)
-        except Exception as e:
-            print(f"Error al enviar correo: {e}")
+        send_email_notification(subject, message, ['sbarahona@grupominerobonanza.com', *security])
 
     class Meta:
         indexes = [

@@ -27,7 +27,6 @@ import tempfile
 import traceback
 import time
 from urllib.parse import urlencode
-import pandas as pd
 import xlwt
 import zipfile
 import mimetypes
@@ -59,6 +58,8 @@ from .services.scoping import (
     people_for_user,
     person_by_id_number_for_user,
 )
+from .services.roles import dashboard_for_role
+from .services.people_import import import_people_dataframe
 
 
 PS_COMMAND = "/usr/bin/ps" if os.path.exists("/usr/bin/ps") else "/bin/ps"
@@ -482,24 +483,11 @@ def role_based_redirect(request):
     """
     user = request.user
     
-    if user.user_type == 'global_admin':
-        return redirect('dashboard_global_admin')
-    elif user.user_type == 'medico':
-        return redirect('dashboard_medico')
-    elif user.user_type == 'rh':
-        return redirect('dashboard_rrhh')
-    elif user.user_type == 'operador':
-        return redirect('dashboard_operador')
-    elif user.user_type == 'admin_mina' or user.user_type == 'admin_molino':
-        return redirect('dashboard_admin')
-    elif user.user_type == 'seguridad_fisica':
-        return redirect('dashboard_seguridad')
-    elif user.user_type == 'tecnico_seguridad':
-        return redirect('dashboard_tecnico')
-    else:
-        # Si no tiene un rol específico, redirigir a una página genérica
-        messages.warning(request, "Su rol de usuario no tiene un panel asignado. Contacte al administrador.")
-        return redirect('login')
+    dashboard = dashboard_for_role(user.user_type)
+    if dashboard:
+        return redirect(dashboard)
+    messages.warning(request, "Su rol de usuario no tiene un panel asignado. Contacte al administrador.")
+    return redirect('login')
 
 
 @login_required
@@ -520,18 +508,23 @@ def dashboard_global_admin(request):
     for organization in organizaciones:
         organization.people_without_photo_count = organization.people_count - organization.people_photo_count
     people_qs = person_queryset_for(request.user)
-    total_personas = people_qs.count()
-    total_personas_con_foto = people_qs.exclude(foto='').exclude(foto__isnull=True).count()
+    people_counts = people_qs.aggregate(
+        total=Count('id'),
+        with_photo=Count('id', filter=Q(foto__isnull=False) & ~Q(foto='')),
+    )
+    organization_counts = organization_qs.aggregate(
+        total=Count('id'), active=Count('id', filter=Q(is_active=True)),
+    )
     users_qs = CustomUser.objects.all()
     if request.user.organization_id:
         users_qs = users_qs.filter(organization=request.user.organization)
     context = {
-        'total_organizaciones': organization_qs.count(),
-        'organizaciones_activas': organization_qs.filter(is_active=True).count(),
+        'total_organizaciones': organization_counts['total'],
+        'organizaciones_activas': organization_counts['active'],
         'total_usuarios': users_qs.count(),
-        'total_personas': total_personas,
-        'total_personas_con_foto': total_personas_con_foto,
-        'total_personas_sin_foto': total_personas - total_personas_con_foto,
+        'total_personas': people_counts['total'],
+        'total_personas_con_foto': people_counts['with_photo'],
+        'total_personas_sin_foto': people_counts['total'] - people_counts['with_photo'],
         'organizaciones': organizaciones,
         'usuarios_recientes': users_qs.select_related('organization').order_by('-date_joined')[:10],
     }
@@ -1298,7 +1291,8 @@ def dashboard_operador(request):
     """Dashboard principal para operadores"""
     
      # Añadir visitas programadas para hoy
-    today = timezone.now().date()
+    today = timezone.localdate()
+    day_start, day_end = local_day_bounds(today)
     visitas_programadas = VisitaProgramada.objects.filter(
         fecha_programada=today,
         status='pendiente'
@@ -1306,7 +1300,8 @@ def dashboard_operador(request):
     
     # Obtener visitantes activos (registrados hoy sin salida)
     visitantes_activos = VisitorRecord.objects.filter(
-        fecha__date=today,
+        fecha__gte=day_start,
+        fecha__lt=day_end,
         fecha_salida__isnull=True
     ).order_by('-fecha')
     personas_org = person_queryset_for(request.user)
@@ -2911,114 +2906,9 @@ def import_excel(request):
                 # Leer el Excel
                 df = pd.read_excel(excel_file)
                 
-                # Contar registros procesados
-                created_count = 0
-                updated_count = 0
-                error_count = 0
-                
-                # Procesar cada fila
-                for _, row in df.iterrows():
-                    try:
-                        # Campos obligatorios
-                        if 'cedula' not in row or 'nombre' not in row or 'apellido' not in row:
-                            error_count += 1
-                            continue
-                        
-                        cedula = str(row['cedula']).strip()
-                        nombre = str(row['nombre']).strip()
-                        apellido = str(row['apellido']).strip()
-                        
-                        if not cedula or not nombre or not apellido:
-                            error_count += 1
-                            continue
-                        
-                        # Buscar o crear persona por cédula
-                        person = person_queryset_for(request.user).filter(id_number=cedula).first()
-                        created = person is None
-                        if created:
-                            person = Person(
-                                id_number=cedula,
-                                first_name=nombre,
-                                last_name=apellido,
-                                birth_date=datetime.now().date(),
-                                gender='O',
-                                estado='activo',
-                                organization=request.user.organization,
-                            )
-                        
-                        # Siempre actualizar estos campos
-                        person.first_name = nombre
-                        person.last_name = apellido
-                        
-                        # Campos opcionales
-                        if 'cargo' in row and pd.notna(row['cargo']):
-                            person.cargo = str(row['cargo'])
-                        
-                        if 'departamento' in row and pd.notna(row['departamento']):
-                            person.departamento = str(row['departamento'])
-                        
-                        if 'area' in row and pd.notna(row['area']):
-                            person.area = str(row['area'])
-                        
-                        if 'email' in row and pd.notna(row['email']):
-                            person.email = str(row['email'])
-                        
-                        if 'telefono' in row and pd.notna(row['telefono']):
-                            person.phone_number = str(row['telefono'])
-                        
-                        if 'contacto_emergencia' in row and pd.notna(row['contacto_emergencia']):
-                            person.contacto_emergencia = str(row['contacto_emergencia'])
-                        
-                        if 'fecha_nacimiento' in row and pd.notna(row['fecha_nacimiento']):
-                            try:
-                                person.birth_date = pd.to_datetime(row['fecha_nacimiento']).date()
-                            except:
-                                pass
-                        
-                        if 'fecha_ingreso' in row and pd.notna(row['fecha_ingreso']):
-                            try:
-                                person.fecha_ingreso = pd.to_datetime(row['fecha_ingreso']).date()
-                            except:
-                                pass
-                        
-                        if 'genero' in row and pd.notna(row['genero']):
-                            genero = str(row['genero']).upper()
-                            if genero in ['M', 'MASCULINO', 'HOMBRE']:
-                                person.gender = 'M'
-                            elif genero in ['F', 'FEMENINO', 'MUJER']:
-                                person.gender = 'F'
-                            else:
-                                person.gender = 'O'
-                        
-                        if 'direccion' in row and pd.notna(row['direccion']):
-                            person.address = str(row['direccion'])
-
-                        if 'estado' in row and pd.notna(row['estado']):
-                            estado = str(row['estado']).strip().lower()
-                            person.estado = 'pasivo' if estado in ['pasivo', 'inactivo', 'retirado', 'egresado'] else 'activo'
-
-                        if 'fecha_egreso' in row and pd.notna(row['fecha_egreso']):
-                            try:
-                                person.fecha_egreso = pd.to_datetime(row['fecha_egreso']).date()
-                            except:
-                                pass
-
-                        if 'anotaciones' in row and pd.notna(row['anotaciones']):
-                            person.anotaciones_rrhh = str(row['anotaciones'])
-
-                        if not person.organization_id:
-                            person.organization = request.user.organization
-                        
-                        person.save()
-                        
-                        if created:
-                            created_count += 1
-                        else:
-                            updated_count += 1
-                            
-                    except Exception as e:
-                        error_count += 1
-                        print(f"Error en fila: {row}, Error: {str(e)}")
+                created_count, updated_count, error_count = import_people_dataframe(
+                    df, request.user.organization,
+                )
                 
                 # Mostrar mensaje de éxito
                 messages.success(request, 

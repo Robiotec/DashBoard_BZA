@@ -8,6 +8,7 @@ import logging
 
 import requests
 from django.conf import settings
+from django.core.mail import send_mail
 
 
 logger = logging.getLogger(__name__)
@@ -47,3 +48,20 @@ def send_telegram_message(message, photo=None):
             response.raise_for_status()
         except requests.RequestException:
             logger.exception('No se pudo enviar la notificación de Telegram.')
+
+
+def send_email_notification(subject, message, recipients):
+    """Envía un correo a una colección de direcciones válidas y sin duplicados."""
+    recipient_list = list(dict.fromkeys(email for email in recipients if email))
+    if not recipient_list:
+        return
+    try:
+        send_mail(
+            subject,
+            message,
+            getattr(settings, 'DEFAULT_FROM_EMAIL', '') or 'registrodatos@grupominerobonanza.com',
+            recipient_list,
+            fail_silently=True,
+        )
+    except Exception:
+        logger.exception('No se pudo enviar la notificación por correo.')
