@@ -62,6 +62,7 @@ from .services.scoping import (
 from .services.roles import dashboard_for_role
 from .services.people_import import import_people_dataframe
 from .services.person_search import resolve_person_search
+from .services.hr_dashboard import overview_metrics
 
 
 PS_COMMAND = "/usr/bin/ps" if os.path.exists("/usr/bin/ps") else "/bin/ps"
@@ -1764,42 +1765,7 @@ def dashboard_rrhh(request):
     today = timezone.now().date()
     now = timezone.now()
     
-    # Conteos para estadísticas
-    personal_qs = person_queryset_for(request.user)
-    personal_counts = personal_qs.aggregate(
-        total=Count('id'),
-        activos=Count('id', filter=Q(estado='activo')),
-        pasivos=Count('id', filter=Q(estado='pasivo')),
-        sin_foto=Count('id', filter=Q(estado='activo') & (Q(foto='') | Q(foto__isnull=True))),
-        sin_alojamiento=Count('id', filter=Q(estado='activo', room_assignment__isnull=True)),
-        sin_comedor=Count('id', filter=Q(estado='activo', dining_hall__isnull=True)),
-        pendientes_medicos=Count('id', filter=Q(estado='activo', medical_checkup=False)),
-    )
-    total_personas = personal_counts['total']
-    total_activos = personal_counts['activos']
-    total_pasivos = personal_counts['pasivos']
-    total_sin_foto = personal_counts['sin_foto']
-    day_start, day_end = local_day_bounds(today)
-    asistencias_hoy = AttendanceRecord.objects.filter(
-        person__in=personal_qs, timestamp__gte=day_start, timestamp__lt=day_end, record_type='entrada'
-    ).values('person_id').distinct().count()
-    room_counts = Room.objects.filter(organization=request.user.organization).aggregate(
-        total=Count('id'),
-        fuera_servicio=Count('id', filter=Q(service_status='out_of_service')),
-    )
-    habitaciones_total = room_counts['total']
-    habitaciones_fuera_servicio = room_counts['fuera_servicio']
-    ocupacion = RoomAssignment.objects.filter(
-        room__organization=request.user.organization, status='occupied'
-    ).count()
-
-    # Vacaciones activas
-    vacaciones_actuales = VacationRecord.objects.filter(
-        person__in=personal_qs,
-        start_date__lte=today,
-        end_date__gte=today
-    )
-    vacaciones_actuales_count = vacaciones_actuales.count()
+    dashboard_metrics = overview_metrics(request.user, today)
 
     form_permiso = PermisoSalidaForm()
     form_vacaciones = VacationRecordForm(user=request.user)
@@ -1872,15 +1838,6 @@ def dashboard_rrhh(request):
         'form_baja': form_baja,
         'permiso_activo': permiso_activo,
         'vacaciones_activas': vacaciones_activas,
-        'total_personas': total_personas,
-        'total_activos': total_activos,
-        'total_pasivos': total_pasivos,
-        'total_sin_foto': total_sin_foto,
-        'asistencias_hoy': asistencias_hoy,
-        'habitaciones_total': habitaciones_total,
-        'habitaciones_fuera_servicio': habitaciones_fuera_servicio,
-        'ocupacion': ocupacion,
-        'vacaciones_actuales_count': vacaciones_actuales_count,
         'historial_permisos': historial_permisos if 'historial_permisos' in locals() else None,
         'historial_vacaciones': historial_vacaciones if 'historial_vacaciones' in locals() else None,
         'historial_sanciones': historial_sanciones if 'historial_sanciones' in locals() else None,
@@ -1889,23 +1846,8 @@ def dashboard_rrhh(request):
         'now': now,
         'person_query': person_query,
         'search_results': search_results,
-        'sin_alojamiento': personal_counts['sin_alojamiento'],
-        'sin_comedor': personal_counts['sin_comedor'],
-        'pendientes_medicos': personal_counts['pendientes_medicos'],
-        'proximos_ingresos': UpcomingEntry.objects.filter(
-            organization=request.user.organization,
-            expected_entry_date__range=(today, today + timedelta(days=7)),
-        ).exclude(status__in=('entered', 'cancelled')).count(),
-        'descansos_activos': MedicalLeaveCase.objects.filter(
-            organization=request.user.organization, status__in=('active', 'pending')
-        ).count(),
-        'hallazgos_abiertos': HRInspection.objects.filter(
-            organization=request.user.organization, status__in=('pending', 'in_progress')
-        ).count(),
-        'tramites_sociales_pendientes': SocialBenefitCase.objects.filter(
-            organization=request.user.organization, status__in=('not_started', 'processing', 'observed')
-        ).count(),
     }
+    context.update(dashboard_metrics)
     
     return render(request, 'gestion_personal/rh/dashboard_rrhh.html', context)
 
