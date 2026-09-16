@@ -14,10 +14,11 @@ from .forms import PermisoSalidaForm, RoomAssignmentForm, VacationRecordForm
 from .models import (
     AccidentCase, AnnualActivity, AttendanceRecord, CustomUser, DiningAssignmentHistory,
     DiningHall, HRAuditLog, HRInspection, MedicalLeaveCase, Organization, Person, PlateLookupRecord, Room,
-    RoomAssignment, RoomOccupancyMovement, SocialBenefitCase, UpcomingEntry, VisitaProgramada,
+    PermisoSalida, RoomAssignment, RoomOccupancyMovement, SocialBenefitCase, UpcomingEntry, VisitaProgramada,
 )
 from .services.hr_analytics import management_dashboard_context
 from .services.people_import import import_people_dataframe
+from .services.detailed_people import search_detailed_people
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -415,6 +416,35 @@ class PeopleImportTests(TestCase):
         self.assertEqual((existing.first_name, existing.gender), ('Elena', 'F'))
         self.assertEqual(created_person.departamento, 'Mina')
         self.assertLessEqual(len(queries), 6)
+
+
+class DetailedPeopleSearchTests(TestCase):
+    def test_search_is_organization_scoped_and_uses_batched_status_queries(self):
+        organization = Organization.objects.create(name='Búsqueda', slug='busqueda')
+        other_organization = Organization.objects.create(name='No visible', slug='no-visible')
+        user = CustomUser.objects.create_user(
+            username='operador-busqueda', password='test-password', user_type='operador', organization=organization,
+        )
+        visible = Person.objects.create(
+            first_name='Carla', last_name='Mora', id_number='0101010101',
+            birth_date=date(1990, 1, 1), gender='F', organization=organization,
+        )
+        Person.objects.create(
+            first_name='Carla', last_name='Externa', id_number='0202020202',
+            birth_date=date(1990, 1, 1), gender='F', organization=other_organization,
+        )
+        PermisoSalida.objects.create(
+            person=visible, motivo='Trámite', fecha_inicio=date.today(), fecha_fin=date.today(), creado_por=user,
+        )
+        AttendanceRecord.objects.create(person=visible, record_type='entrada', recorded_by=user)
+
+        with CaptureQueriesContext(connection) as queries:
+            results = search_detailed_people(user, 'Carla', date.today())
+
+        self.assertEqual(len(results), 1)
+        self.assertTrue(results[0]['permiso_activo'])
+        self.assertTrue(results[0]['esta_dentro'])
+        self.assertLessEqual(len(queries), 3)
 
 
 class PlateLookupQueueTests(TestCase):

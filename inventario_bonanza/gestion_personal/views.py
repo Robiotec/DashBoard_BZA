@@ -63,6 +63,7 @@ from .services.roles import dashboard_for_role
 from .services.people_import import import_people_dataframe
 from .services.person_search import resolve_person_search
 from .services.hr_dashboard import overview_metrics
+from .services.detailed_people import search_detailed_people
 
 
 PS_COMMAND = "/usr/bin/ps" if os.path.exists("/usr/bin/ps") else "/bin/ps"
@@ -3942,72 +3943,9 @@ def buscar_persona_detallada(request):
     Vista compartida para búsqueda detallada de personas con información completa
     """
     search_term = request.GET.get('q', '')
-    user = request.user
-    
     if not search_term:
         return JsonResponse({'error': 'Por favor proporcione un término de búsqueda'}, status=400)
-    
-    # Filtro de área para administradores
-    area_filter = None
-    if user.user_type in ['admin_mina', 'admin_molino']:
-        area = 'mina' if user.user_type == 'admin_mina' else 'molino'
-        area_filter = Q(area__icontains=area)
-    
-    # Aplicar búsqueda base
-    query = Q(first_name__icontains=search_term) | Q(last_name__icontains=search_term) | Q(id_number__icontains=search_term)
-    
-    # Aplicar filtro de área si existe
-    if area_filter:
-        query = query & area_filter
-    
-    personas = Person.objects.filter(query)[:20]
-    
-    # Preparar datos detallados
-    today = timezone.now().date()
-    
-    results = []
-    for persona in personas:
-        # Verificar estado actual
-        permiso_activo = PermisoSalida.objects.filter(
-            person=persona,
-            fecha_inicio__lte=today,
-            fecha_fin__gte=today
-        ).exists()
-        
-        vacaciones_activas = VacationRecord.objects.filter(
-            person=persona,
-            start_date__lte=today,
-            end_date__gte=today
-        ).exists()
-        
-        ultimo_registro = AttendanceRecord.objects.filter(
-            person=persona
-        ).order_by('-timestamp').first()
-        
-        esta_dentro = ultimo_registro and ultimo_registro.record_type == 'entrada'
-        
-        persona_data = {
-            'id': persona.id,
-            'nombre_completo': f"{persona.first_name} {persona.last_name}",
-            'id_number': persona.id_number,
-            'cargo': persona.cargo or '',
-            'departamento': persona.departamento or '',
-            'area': persona.area or '',
-            'contacto': persona.phone_number or '',
-            'email': persona.email or '',
-            'fecha_ingreso': persona.fecha_ingreso.strftime('%d/%m/%Y') if persona.fecha_ingreso else '',
-            'permiso_activo': permiso_activo,
-            'en_vacaciones': vacaciones_activas,
-            'esta_dentro': esta_dentro,
-            'chequeo_medico': persona.medical_checkup,
-        }
-        
-        # Añadir URL de la foto si existe
-        if persona.foto:
-            persona_data['foto_url'] = persona.foto.url
-            
-        results.append(persona_data)
-    
+    results = search_detailed_people(request.user, search_term, timezone.localdate())
     return JsonResponse({'results': results})
 
 @login_required
