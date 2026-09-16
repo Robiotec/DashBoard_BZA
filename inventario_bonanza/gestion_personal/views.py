@@ -61,6 +61,7 @@ from .services.scoping import (
 )
 from .services.roles import dashboard_for_role
 from .services.people_import import import_people_dataframe
+from .services.person_search import resolve_person_search
 
 
 PS_COMMAND = "/usr/bin/ps" if os.path.exists("/usr/bin/ps") else "/bin/ps"
@@ -1792,20 +1793,12 @@ def dashboard_rrhh(request):
         room__organization=request.user.organization, status='occupied'
     ).count()
 
-    # Permisos y vacaciones activos
-    personas_org = personal_qs
-    permisos_activos = PermisoSalida.objects.filter(
-        person__in=personas_org,
-        fecha_inicio__lte=today,
-        fecha_fin__gte=today
-    ).select_related('person', 'creado_por')
-    permisos_activos_count = permisos_activos.count()
-    
+    # Vacaciones activas
     vacaciones_actuales = VacationRecord.objects.filter(
-        person__in=personas_org,
+        person__in=personal_qs,
         start_date__lte=today,
         end_date__gte=today
-    ).select_related('person', 'approved_by')
+    )
     vacaciones_actuales_count = vacaciones_actuales.count()
 
     form_permiso = PermisoSalidaForm()
@@ -1824,22 +1817,9 @@ def dashboard_rrhh(request):
             fecha_filter = today
 
     if person_query:
-        try:
-            matches = person_queryset_for(request.user).filter(
-                Q(id_number__icontains=person_query) |
-                Q(first_name__icontains=person_query) |
-                Q(last_name__icontains=person_query) |
-                Q(first_name__icontains=person_query.split()[0])
-            ).order_by('last_name', 'first_name')
-            exact_match = matches.filter(id_number__iexact=person_query).first()
-            if exact_match:
-                persona = exact_match
-            elif matches.count() == 1:
-                persona = matches.first()
-            else:
-                search_results = matches[:15]
-                raise Person.MultipleObjectsReturned
+        persona, search_results = resolve_person_search(request.user, person_query)
 
+        if persona:
             # Historial de asistencia
             filter_start, filter_end = local_day_bounds(fecha_filter)
             historial = AttendanceRecord.objects.filter(
@@ -1883,12 +1863,6 @@ def dashboard_rrhh(request):
             form_sancion = SanctionForm(initial={'person': persona}, user=request.user)
             form_baja = BajaPersonaForm(instance=persona, initial={'fecha_egreso': today})
 
-        except Person.MultipleObjectsReturned:
-            persona = None
-        except Person.DoesNotExist:
-            persona = None
-            messages.error(request, "No se encontró ninguna persona con esta cédula.")
-
     context = {
         'persona': persona,
         'historial': historial,
@@ -1906,8 +1880,6 @@ def dashboard_rrhh(request):
         'habitaciones_total': habitaciones_total,
         'habitaciones_fuera_servicio': habitaciones_fuera_servicio,
         'ocupacion': ocupacion,
-        'permisos_activos': permisos_activos,
-        'permisos_activos_count': permisos_activos_count,
         'vacaciones_actuales_count': vacaciones_actuales_count,
         'historial_permisos': historial_permisos if 'historial_permisos' in locals() else None,
         'historial_vacaciones': historial_vacaciones if 'historial_vacaciones' in locals() else None,
@@ -2339,24 +2311,22 @@ class PersonListView(ListView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        base_photo_queryset = person_queryset_for(self.request.user)
-        photo_count = base_photo_queryset.exclude(foto='').exclude(foto__isnull=True).count()
+        base_queryset = person_queryset_for(self.request.user)
+        organization_id = self.request.GET.get('organization', '')
+        if self.request.user.user_type == 'global_admin' and organization_id.isdigit():
+            base_queryset = base_queryset.filter(organization_id=organization_id)
+        photo_counts = base_queryset.aggregate(
+            total=Count('id'),
+            with_photo=Count('id', filter=Q(foto__isnull=False) & ~Q(foto='')),
+        )
         context['selected_foto'] = self.request.GET.get('foto', '')
-        context['total_con_foto'] = photo_count
-        context['total_sin_foto'] = base_photo_queryset.count() - photo_count
+        context['total_con_foto'] = photo_counts['with_photo']
+        context['total_sin_foto'] = photo_counts['total'] - photo_counts['with_photo']
         if self.request.user.user_type == 'global_admin':
-            organization_id = self.request.GET.get('organization', '')
-            base_queryset = person_queryset_for(self.request.user)
-            if organization_id.isdigit():
-                base_queryset = base_queryset.filter(organization_id=organization_id)
-            photo_count = base_queryset.exclude(foto='').exclude(foto__isnull=True).count()
             context['organizaciones'] = Organization.objects.filter(
                 Q(pk=self.request.user.organization_id) if self.request.user.organization_id else Q()
             ).order_by('name')
             context['selected_organization'] = organization_id
-            context['selected_foto'] = self.request.GET.get('foto', '')
-            context['total_con_foto'] = photo_count
-            context['total_sin_foto'] = base_queryset.count() - photo_count
             context['current_query_string'] = urlencode({
                 key: value
                 for key, value in self.request.GET.items()
