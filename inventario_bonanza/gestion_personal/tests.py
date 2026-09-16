@@ -14,11 +14,13 @@ from .forms import PermisoSalidaForm, RoomAssignmentForm, VacationRecordForm
 from .models import (
     AccidentCase, AnnualActivity, AttendanceRecord, CustomUser, DiningAssignmentHistory,
     DiningHall, HRAuditLog, HRInspection, MedicalLeaveCase, Organization, Person, PlateLookupRecord, Room,
-    PermisoSalida, RoomAssignment, RoomOccupancyMovement, SocialBenefitCase, UpcomingEntry, VisitaProgramada,
+    MonthlyWorkDay, PermisoSalida, RoomAssignment, RoomOccupancyMovement, SocialBenefitCase, UpcomingEntry,
+    VisitaProgramada,
 )
 from .services.hr_analytics import management_dashboard_context
 from .services.people_import import import_people_dataframe
 from .services.detailed_people import search_detailed_people
+from .services.workdays import save_monthly_workdays
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -445,6 +447,42 @@ class DetailedPeopleSearchTests(TestCase):
         self.assertTrue(results[0]['permiso_activo'])
         self.assertTrue(results[0]['esta_dentro'])
         self.assertLessEqual(len(queries), 3)
+
+
+class MonthlyWorkdayPersistenceTests(TestCase):
+    def test_monthly_grid_is_persisted_in_batches(self):
+        organization = Organization.objects.create(name='Jornadas', slug='jornadas')
+        user = CustomUser.objects.create_user(
+            username='rrhh-jornadas', password='test-password', user_type='rh', organization=organization,
+        )
+        first_person = Person.objects.create(
+            first_name='Andrea', last_name='Luz', id_number='0303030303',
+            birth_date=date(1990, 1, 1), gender='F', organization=organization,
+        )
+        second_person = Person.objects.create(
+            first_name='Mario', last_name='Sol', id_number='0404040404',
+            birth_date=date(1990, 1, 1), gender='M', organization=organization,
+        )
+        days = [date(2026, 9, 1), date(2026, 9, 2)]
+        MonthlyWorkDay.objects.create(person=first_person, date=days[0], status='free', recorded_by=user)
+        MonthlyWorkDay.objects.create(person=first_person, date=days[1], status='worked', recorded_by=user)
+        post_data = {
+            f'status_{first_person.id}_{days[0].isoformat()}': 'worked',
+            f'status_{first_person.id}_{days[1].isoformat()}': '',
+            f'status_{second_person.id}_{days[0].isoformat()}': 'vacation',
+        }
+
+        with CaptureQueriesContext(connection) as queries:
+            saved, deleted = save_monthly_workdays(
+                post_data, [first_person, second_person], days,
+                {'worked', 'free', 'vacation'}, user,
+            )
+
+        self.assertEqual((saved, deleted), (2, 1))
+        self.assertEqual(MonthlyWorkDay.objects.get(person=first_person, date=days[0]).status, 'worked')
+        self.assertFalse(MonthlyWorkDay.objects.filter(person=first_person, date=days[1]).exists())
+        self.assertEqual(MonthlyWorkDay.objects.get(person=second_person, date=days[0]).status, 'vacation')
+        self.assertLessEqual(len(queries), 6)
 
 
 class PlateLookupQueueTests(TestCase):

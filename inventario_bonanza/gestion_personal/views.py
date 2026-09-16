@@ -65,6 +65,7 @@ from .services.person_search import resolve_person_search
 from .services.hr_dashboard import overview_metrics
 from .services.detailed_people import search_detailed_people
 from .services.record_metrics import attendance_counts, vehicle_counts
+from .services.workdays import save_monthly_workdays
 
 
 PS_COMMAND = "/usr/bin/ps" if os.path.exists("/usr/bin/ps") else "/bin/ps"
@@ -4144,27 +4145,9 @@ def monthly_workday_template(request):
     )
 
     if request.method == 'POST':
-        saved = 0
-        deleted = 0
-        allowed_statuses = set(WORKDAY_STATUS_META.keys())
-        for person in people:
-            for day in days:
-                field_name = f"status_{person.id}_{day.isoformat()}"
-                if field_name not in request.POST:
-                    continue
-                status = request.POST.get(field_name, '').strip()
-                if status and status not in allowed_statuses:
-                    continue
-                existing = MonthlyWorkDay.objects.filter(person=person, date=day)
-                if not status:
-                    deleted += existing.delete()[0]
-                    continue
-                MonthlyWorkDay.objects.update_or_create(
-                    person=person,
-                    date=day,
-                    defaults={'status': status, 'recorded_by': request.user},
-                )
-                saved += 1
+        saved, deleted = save_monthly_workdays(
+            request.POST, people, days, set(WORKDAY_STATUS_META), request.user,
+        )
 
         messages.success(request, f"Plantilla mensual actualizada: {saved} días guardados, {deleted} días limpiados.")
         query = urlencode({
