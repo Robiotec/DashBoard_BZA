@@ -8,7 +8,8 @@ from django.core.exceptions import ValidationError
 from django.conf import settings
 from django.db.models.signals import post_save
 from django.dispatch import receiver
-import requests
+
+from .services.notifications import send_telegram_message
 
 #Nuevos
 def person_photo_upload_to(instance, filename):
@@ -368,37 +369,7 @@ class AttendanceRecord(models.Model):
         self.notify_telegram(message)
 
     def notify_telegram(self, message):
-        token = getattr(settings, 'TELEGRAM_BOT_TOKEN', '')
-        chat_ids = getattr(settings, 'TELEGRAM_CHAT_IDS', [])
-        if not token or not chat_ids:
-            return
-
-        caption = message.strip()
-        if len(caption) > 1024:
-            caption = caption[:1000] + "\n..."
-
-        for chat_id in chat_ids:
-            try:
-                if self.person.foto:
-                    self.person.foto.open('rb')
-                    try:
-                        response = requests.post(
-                            f"https://api.telegram.org/bot{token}/sendPhoto",
-                            data={'chat_id': chat_id, 'caption': caption},
-                            files={'photo': self.person.foto.file},
-                            timeout=15,
-                        )
-                    finally:
-                        self.person.foto.close()
-                else:
-                    response = requests.post(
-                        f"https://api.telegram.org/bot{token}/sendMessage",
-                        data={'chat_id': chat_id, 'text': caption},
-                        timeout=15,
-                    )
-                response.raise_for_status()
-            except Exception as e:
-                print(f"Error al enviar Telegram: {e}")
+        send_telegram_message(message, photo=self.person.foto if self.person.foto else None)
     
     class Meta:
         verbose_name = "Registro de Asistencia"

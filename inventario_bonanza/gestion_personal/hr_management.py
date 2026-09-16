@@ -1,11 +1,11 @@
 import calendar
 import csv
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from io import BytesIO
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required, user_passes_test
-from django.db.models import Count, Q, Sum
+from django.db.models import Q
 from django.http import FileResponse, Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
@@ -28,16 +28,14 @@ from .forms import (
 from .models import (
     AccidentCase,
     AnnualActivity,
-    DiningHall,
     HRAuditLog,
     HRInspection,
     MedicalLeaveCase,
     Person,
-    Room,
-    RoomAssignment,
     SocialBenefitCase,
     UpcomingEntry,
 )
+from .services.hr_analytics import management_dashboard_context
 
 
 def is_rh_manager(user):
@@ -206,112 +204,10 @@ def hr_management_dashboard(request):
         month_start = today.replace(day=1)
         month_value = month_start.strftime('%Y-%m')
     month_end = date(month_start.year, month_start.month, calendar.monthrange(month_start.year, month_start.month)[1])
-    organization = request.user.organization
-
-    rooms = Room.objects.filter(organization=organization)
-    enabled_capacity = rooms.filter(service_status='available').aggregate(total=Sum('capacity'))['total'] or 0
-    occupied = RoomAssignment.objects.filter(room__organization=organization, status='occupied').count()
-    reserved = RoomAssignment.objects.filter(room__organization=organization, status='reserved').count()
-    reserved += UpcomingEntry.objects.filter(
-        organization=organization, room__isnull=False
-    ).exclude(status__in=('entered', 'cancelled')).count()
-    available = max(enabled_capacity - occupied - reserved, 0)
-    occupation_pct = round(occupied * 100 / enabled_capacity, 1) if enabled_capacity else 0
-    active_people = Person.objects.filter(organization=organization, estado='activo')
-    planned_workdays = active_people.aggregate(total=Sum('dias_jornada'))['total'] or 0
-
-    upcoming_month = UpcomingEntry.objects.filter(organization=organization, expected_entry_date__range=(month_start, month_end))
-    activity_ids = [
-        item.pk for item in AnnualActivity.objects.filter(organization=organization)
-        if month_start.month in item.execution_months or (item.planned_date and month_start <= item.planned_date <= month_end)
-    ]
-    activities_month = AnnualActivity.objects.filter(pk__in=activity_ids)
-    completed_activities = activities_month.filter(status='completed').count()
-    activity_total = activities_month.count()
-    activity_compliance = round(completed_activities * 100 / activity_total, 1) if activity_total else 0
-    inspections_month = HRInspection.objects.filter(organization=organization, inspection_date__range=(month_start, month_end))
-    leaves_month = MedicalLeaveCase.objects.filter(organization=organization, start_date__lte=month_end, end_date__gte=month_start)
-    accidents_month = AccidentCase.objects.filter(organization=organization, event_date__range=(month_start, month_end))
-    benefits = SocialBenefitCase.objects.filter(organization=organization)
-
-    dining_counts = list(DiningHall.objects.filter(organization=organization).annotate(
-        assigned=Count('diners', filter=Q(diners__estado='activo'))
-    ).values('name', 'assigned').order_by('name'))
-    medical_days = leaves_month.aggregate(total=Sum('days'))['total'] or 0
-    medical_absenteeism = round(medical_days * 100 / planned_workdays, 2) if planned_workdays else 0
-    incidence_areas = list(leaves_month.values('person__departamento').annotate(
-        cases=Count('id'), days=Sum('days')
-    ).order_by('-cases', '-days')[:5])
-    benefit_statuses = [
-        {'label': label, 'count': benefits.filter(status=value).count()}
-        for value, label in SocialBenefitCase.STATUS_CHOICES
-    ]
-
-    alerts = []
-    for entry in UpcomingEntry.objects.filter(
-        organization=organization, expected_entry_date__range=(today, today + timedelta(days=7))
-    ).exclude(status__in=('entered', 'cancelled')).select_related('room', 'dining_hall'):
-        pending = []
-        if not entry.requirements_complete:
-            pending.append('requisitos')
-        if not entry.room_id:
-            pending.append('alojamiento')
-        if not entry.dining_hall_id:
-            pending.append('comedor')
-        if pending:
-            alerts.append({'level': 'danger', 'module': 'ingresos', 'text': f'{_object_label(entry)} ingresa el {entry.expected_entry_date:%d/%m}: falta {", ".join(pending)}.'})
-    for leave in MedicalLeaveCase.objects.filter(
-        organization=organization, end_date__range=(today, today + timedelta(days=3)), status__in=('active', 'pending')
-    ).select_related('person'):
-        alerts.append({'level': 'warning', 'module': 'descansos', 'text': f'El descanso de {_object_label(leave)} finaliza el {leave.end_date:%d/%m/%Y}.'})
-    for activity in AnnualActivity.objects.filter(organization=organization, due_date__lt=today).exclude(status__in=('completed', 'cancelled')):
-        alerts.append({'level': 'warning', 'module': 'cronograma', 'text': f'Actividad vencida: {activity.action_line}.'})
-    for inspection in HRInspection.objects.filter(organization=organization, due_date__lt=today).exclude(status__in=('verified', 'closed')):
-        alerts.append({'level': 'danger', 'module': 'inspecciones', 'text': f'Acción de inspección vencida en {inspection.location}.'})
-
-    comparison = []
-    cursor = month_start
-    for offset in range(5, -1, -1):
-        total_months = cursor.year * 12 + cursor.month - 1 - offset
-        item_year, item_month = divmod(total_months, 12)
-        item_month += 1
-        start = date(item_year, item_month, 1)
-        end = date(item_year, item_month, calendar.monthrange(item_year, item_month)[1])
-        comparison.append({
-            'label': calendar.month_abbr[item_month].title(),
-            'medical': MedicalLeaveCase.objects.filter(organization=organization, start_date__lte=end, end_date__gte=start).count(),
-            'accidents': AccidentCase.objects.filter(organization=organization, event_date__range=(start, end)).count(),
-            'inspections': HRInspection.objects.filter(organization=organization, inspection_date__range=(start, end)).count(),
-        })
-    chart_max = max([value for item in comparison for value in (item['medical'], item['accidents'], item['inspections'])] or [1])
-    for item in comparison:
-        item['medical_pct'] = max(item['medical'] * 100 / chart_max, 3) if item['medical'] else 0
-        item['accidents_pct'] = max(item['accidents'] * 100 / chart_max, 3) if item['accidents'] else 0
-        item['inspections_pct'] = max(item['inspections'] * 100 / chart_max, 3) if item['inspections'] else 0
-
-    context = {
-        'modules': MODULES, 'month_value': month_value, 'alerts': alerts[:12], 'dining_counts': dining_counts,
-        'capacity': enabled_capacity, 'occupied': occupied, 'reserved': reserved, 'available': available,
-        'occupation_pct': occupation_pct, 'without_dining': active_people.filter(dining_hall__isnull=True).count(),
-        'upcoming_count': upcoming_month.count(), 'upcoming_without_room': upcoming_month.filter(room__isnull=True).count(),
-        'activity_total': activity_total, 'completed_activities': completed_activities, 'activity_compliance': activity_compliance,
-        'rescheduled_activities': activities_month.filter(status='rescheduled').count(),
-        'activity_evidence_pending': activities_month.filter(status='completed', evidence='', evidence_link='').count(),
-        'inspections_count': inspections_month.count(),
-        'open_findings': HRInspection.objects.filter(organization=organization, status__in=('pending', 'in_progress')).count(),
-        'closed_actions': inspections_month.filter(status__in=('verified', 'closed')).count(),
-        'medical_cases': leaves_month.count(), 'medical_days': medical_days,
-        'medical_absenteeism': medical_absenteeism, 'planned_workdays': planned_workdays,
-        'incidence_areas': incidence_areas,
-        'medical_active': MedicalLeaveCase.objects.filter(organization=organization, status__in=('active', 'pending')).count(),
-        'returns': leaves_month.filter(status__in=('returned', 'relocated', 'closed'), expected_return_date__range=(month_start, month_end)).count(),
-        'accident_count': accidents_month.count(), 'company_days': accidents_month.aggregate(total=Sum('company_days'))['total'] or 0,
-        'iess_days': accidents_month.aggregate(total=Sum('iess_days'))['total'] or 0,
-        'benefits_pending': benefits.filter(status__in=('not_started', 'processing', 'observed')).count(),
-        'documents_pending': benefits.exclude(pending_documents='').exclude(status__in=('closed', 'not_applicable')).count(),
-        'benefit_statuses': benefit_statuses,
-        'comparison': comparison, 'audit_logs': HRAuditLog.objects.filter(organization=organization).select_related('user')[:12],
-    }
+    context = management_dashboard_context(
+        request.user.organization, month_start, month_end, today, _object_label,
+    )
+    context.update({'modules': MODULES, 'month_value': month_value})
     return render(request, 'gestion_personal/rh/hr_management_dashboard.html', context)
 
 

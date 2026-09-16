@@ -112,7 +112,6 @@ urlpatterns = [
     
     # Compartidos
     path('buscar-persona-detallada/', views.buscar_persona_detallada, name='buscar_persona_detallada'),
-    path('operador/registros/', views.registros_diarios, name='registros_detallados'),
     path('operador/marcacion-rapida/', views.marcacion_rapida, name='marcacion_rapida'),
     path('operador/retorno-vacaciones/', views.retorno_vacaciones, name='retorno_vacaciones'),
     path('rh/vacaciones/', views.vacation_list, name='vacation_list'),

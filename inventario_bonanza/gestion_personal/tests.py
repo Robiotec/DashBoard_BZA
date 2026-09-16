@@ -1,4 +1,5 @@
 from django.test import TestCase, override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from datetime import date, timedelta
 from unittest.mock import patch
@@ -6,6 +7,7 @@ import subprocess
 
 from django.core.management import call_command
 from django.utils import timezone
+from django.db import connection
 
 from .forms import PermisoSalidaForm, RoomAssignmentForm, VacationRecordForm
 from .models import (
@@ -13,6 +15,7 @@ from .models import (
     DiningHall, HRAuditLog, HRInspection, MedicalLeaveCase, Organization, Person, PlateLookupRecord, Room,
     RoomAssignment, RoomOccupancyMovement, SocialBenefitCase, UpcomingEntry, VisitaProgramada,
 )
+from .services.hr_analytics import management_dashboard_context
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -345,6 +348,47 @@ class HRManagementRequirementsTests(TestCase):
         self.assertNotContains(listing, 'No visible')
         edit = self.client.get(reverse('hr_module', args=['inspecciones']), {'edit': outsider.pk})
         self.assertEqual(edit.status_code, 404)
+
+
+class HRAnalyticsTests(TestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Analítica', slug='analitica')
+        self.person = Person.objects.create(
+            first_name='Elena', last_name='Paz', id_number='0102030405',
+            birth_date=date(1990, 1, 1), gender='F', estado='activo',
+            organization=self.organization, departamento='Operaciones', dias_jornada=20,
+        )
+
+    def test_management_dashboard_aggregates_metrics_and_limits_queries(self):
+        month_start = date(2026, 9, 1)
+        month_end = date(2026, 9, 30)
+        MedicalLeaveCase.objects.create(
+            organization=self.organization, person=self.person, start_date=date(2026, 8, 30),
+            end_date=date(2026, 9, 3), expected_return_date=date(2026, 9, 4),
+            reason='general_illness', days=5, responsible='RRHH', status='active',
+        )
+        AccidentCase.objects.create(
+            organization=self.organization, person=self.person, event_type='Caída',
+            event_date=date(2026, 9, 10), event_place='Mina',
+            leave_start_date=date(2026, 9, 10), leave_end_date=date(2026, 9, 11),
+            total_leave_days=2, company_days=2, procedure_status='notice_pending',
+        )
+        AnnualActivity.objects.create(
+            organization=self.organization, action_line='Capacitación', activity='Inducción',
+            responsible='RRHH', execution_months=[9], status='completed',
+        )
+
+        with CaptureQueriesContext(connection) as queries:
+            context = management_dashboard_context(
+                self.organization, month_start, month_end, month_start, str,
+            )
+
+        self.assertEqual(context['medical_cases'], 1)
+        self.assertEqual(context['medical_days'], 5)
+        self.assertEqual(context['accident_count'], 1)
+        self.assertEqual(context['completed_activities'], 1)
+        self.assertEqual(len(context['comparison']), 6)
+        self.assertLessEqual(len(queries), 23)
 
 
 class PlateLookupQueueTests(TestCase):

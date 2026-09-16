@@ -17,11 +17,26 @@ Dashboard Django para gestion de personal, accesos, visitantes, vehiculos y cons
 - `inventario_bonanza/manage.py`: entrada de comandos de Django
 - `inventario_bonanza/inventario_bonanza/`: configuracion principal del proyecto
 - `inventario_bonanza/gestion_personal/`: app principal
+- `inventario_bonanza/gestion_personal/services/`: reglas reutilizables de dominio, métricas, alcance, fechas y notificaciones
 - `inventario_bonanza/static/`: estaticos fuente versionables
 - `inventario_bonanza/media/`: archivos subidos localmente
-- `inventario_bonanza/staticfiles/`: salida de `collectstatic`
+- `inventario_bonanza/staticfiles/`: salida local de `collectstatic`, no versionada
 - `consulta_people/`: fuentes de consulta para personas
 - `consulta_plates/`: fuentes de consulta para placas
+
+## Diseño del código
+
+Las vistas conservan la capa HTTP: autorización, parámetros, respuestas y plantillas.
+La lógica que se reutiliza está separada en `gestion_personal/services/`:
+
+- `scoping.py`: acceso a datos por organización.
+- `dates.py`: rangos indexables para filtros diarios sobre campos de fecha y hora.
+- `notifications.py`: entrega de alertas de Telegram.
+- `lookup_sources.py`: carga segura de conectores de consultas externas.
+- `hr_analytics.py`: métricas agregadas del tablero integral de RRHH.
+
+Los directorios locales con credenciales, datos operativos, cachés, registros,
+archivos generados y el entorno virtual se excluyen mediante `.gitignore`.
 
 ## Flujo de despliegue
 

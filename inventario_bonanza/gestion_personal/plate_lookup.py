@@ -1,4 +1,3 @@
-import importlib.util
 import logging
 import re
 from pathlib import Path
@@ -6,6 +5,7 @@ from pathlib import Path
 from django.utils import timezone
 
 from .models import PlateLookupRecord
+from .services.lookup_sources import call_source, load_source_module
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -48,22 +48,11 @@ def plate_variants(plate):
 
 
 def load_consulta_module(module_name):
-    module_path = CONSULTA_PLATES_DIR / f"{module_name}.py"
-    spec = importlib.util.spec_from_file_location(module_name, module_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return load_source_module(CONSULTA_PLATES_DIR, module_name)
 
 
 def safe_consultar(module_name, plate):
-    try:
-        module = load_consulta_module(module_name)
-        result = module.consultar_placa(plate)
-        if not isinstance(result, dict):
-            return {"placa": plate, "error": "La fuente no devolvio un diccionario."}
-        return result
-    except Exception as exc:
-        return {"placa": plate, "error": str(exc)}
+    return call_source(CONSULTA_PLATES_DIR, module_name, 'consultar_placa', plate, 'placa')
 
 
 def first_value(*values):

@@ -32,13 +32,33 @@ import xlwt
 import zipfile
 import mimetypes
 import re
-import requests
 
 from django.db import connection
-from .models import *
-from .forms import *
+from .models import (
+    AccidentCase, AnnualActivity, AttendanceRecord, CustomUser, DiningAssignmentHistory,
+    DiningHall, EPPAssignment, HRInspection, MedicalConsultation, MedicalHistory,
+    MedicalLeaveCase, MonthlyWorkDay, Organization, PermisoSalida, Person,
+    PersonLookupRecord, PlateLookupRecord, Room, RoomAssignment,
+    RoomOccupancyMovement, Sanction, SocialBenefitCase, UpcomingEntry, VacationRecord,
+    VehicleRecord, VisitaProgramada, VisitorRecord,
+)
+from .forms import (
+    BajaPersonaForm, CustomUserChangeForm, CustomUserCreationForm, DiningHallForm,
+    EPPAssignmentForm, ImportExcelForm, MedicalCheckupForm, MedicalConsultationForm,
+    MedicalHistoryForm, OrganizationForm, PermisoSalidaForm, PersonForm,
+    PersonLookupForm, PlateLookupForm, RoomAssignmentForm, RoomForm,
+    RoomMaintenanceIssueForm, SanctionForm, VacationRecordForm, VehicleRecordForm,
+    VisitaProgramadaForm, VisitorRecordForm,
+)
 from .plate_lookup import normalize_plate, plate_variants
 from .person_lookup import normalize_cedula
+from .services.notifications import send_telegram_message
+from .services.dates import local_date_range_bounds, local_day_bounds
+from .services.scoping import (
+    organization_filter_for as _organization_filter_for,
+    people_for_user,
+    person_by_id_number_for_user,
+)
 
 
 PS_COMMAND = "/usr/bin/ps" if os.path.exists("/usr/bin/ps") else "/bin/ps"
@@ -259,50 +279,16 @@ def get_server_status_payload():
     }
 
 def organization_filter_for(user):
-    if getattr(user, 'user_type', None) == 'global_admin' and not getattr(user, 'organization_id', None):
-        return Q()
-    if getattr(user, 'organization_id', None):
-        return Q(organization=user.organization)
-    return Q(organization__isnull=True)
+    return _organization_filter_for(user)
 
 def person_queryset_for(user):
-    return Person.objects.filter(organization_filter_for(user))
+    return people_for_user(user)
 
 def person_by_cedula_for_user(user, cedula):
-    return person_queryset_for(user).filter(id_number=cedula).first()
+    return person_by_id_number_for_user(user, cedula)
 
 def send_telegram_access_alert(message, person=None):
-    token = getattr(settings, 'TELEGRAM_BOT_TOKEN', '')
-    chat_ids = getattr(settings, 'TELEGRAM_CHAT_IDS', [])
-    if not token or not chat_ids:
-        return
-
-    caption = message.strip()
-    if len(caption) > 1024:
-        caption = caption[:1000] + "\n..."
-
-    for chat_id in chat_ids:
-        try:
-            if person and person.foto:
-                person.foto.open('rb')
-                try:
-                    response = requests.post(
-                        f"https://api.telegram.org/bot{token}/sendPhoto",
-                        data={'chat_id': chat_id, 'caption': caption},
-                        files={'photo': person.foto.file},
-                        timeout=15,
-                    )
-                finally:
-                    person.foto.close()
-            else:
-                response = requests.post(
-                    f"https://api.telegram.org/bot{token}/sendMessage",
-                    data={'chat_id': chat_id, 'text': caption},
-                    timeout=15,
-                )
-            response.raise_for_status()
-        except Exception as e:
-            print(f"Error al enviar alerta Telegram: {e}")
+    send_telegram_message(message, photo=person.foto if person and person.foto else None)
 
 
 def access_alert_message(title, cedula=None, person=None, user=None, detail=None):
@@ -691,14 +677,15 @@ def global_records(request):
     organization_id = request.GET.get('organization', '')
     person_search = (request.GET.get('q') or request.GET.get('cedula') or '').strip()
 
+    day_start, day_end = local_day_bounds(fecha_obj)
     registros_personal = AttendanceRecord.objects.select_related(
         'person', 'person__organization', 'recorded_by'
-    ).filter(timestamp__date=fecha_obj)
+    ).filter(timestamp__gte=day_start, timestamp__lt=day_end)
     registros_vehiculos = VehicleRecord.objects.select_related(
         'organization', 'registrado_por', 'salida_registrada_por'
     ).filter(
-        Q(fecha_ingreso__date=fecha_obj) |
-        Q(fecha_salida__date=fecha_obj)
+        Q(fecha_ingreso__gte=day_start, fecha_ingreso__lt=day_end) |
+        Q(fecha_salida__gte=day_start, fecha_salida__lt=day_end)
     )
     if request.user.organization_id:
         registros_personal = registros_personal.filter(person__organization=request.user.organization)
@@ -1435,8 +1422,9 @@ def registros_diarios(request):
     busqueda = request.GET.get('busqueda', '')
     
     # Filtrar registros de personal
+    day_start, day_end = local_day_bounds(fecha_obj)
     registros_personal = AttendanceRecord.objects.select_related('person', 'recorded_by').filter(
-        timestamp__date=fecha_obj,
+        timestamp__gte=day_start, timestamp__lt=day_end,
         person__in=person_queryset_for(request.user),
     )
     if busqueda:
@@ -1447,7 +1435,7 @@ def registros_diarios(request):
         )
     
     # Filtrar registros de visitantes
-    registros_visitantes = VisitorRecord.objects.filter(fecha__date=fecha_obj)
+    registros_visitantes = VisitorRecord.objects.filter(fecha__gte=day_start, fecha__lt=day_end)
     if busqueda:
         registros_visitantes = registros_visitantes.filter(
             Q(nombre__icontains=busqueda) | 
@@ -1457,8 +1445,8 @@ def registros_diarios(request):
     
     # Filtrar registros de vehículos
     registros_vehiculos = VehicleRecord.objects.select_related('organization', 'registrado_por').filter(
-        Q(fecha_ingreso__date=fecha_obj) | 
-        Q(fecha_salida__date=fecha_obj)
+        Q(fecha_ingreso__gte=day_start, fecha_ingreso__lt=day_end) |
+        Q(fecha_salida__gte=day_start, fecha_salida__lt=day_end)
     ).filter(organization_filter_for(request.user))
     if busqueda:
         registros_vehiculos = registros_vehiculos.filter(
@@ -1788,17 +1776,24 @@ def dashboard_rrhh(request):
         activos=Count('id', filter=Q(estado='activo')),
         pasivos=Count('id', filter=Q(estado='pasivo')),
         sin_foto=Count('id', filter=Q(estado='activo') & (Q(foto='') | Q(foto__isnull=True))),
+        sin_alojamiento=Count('id', filter=Q(estado='activo', room_assignment__isnull=True)),
+        sin_comedor=Count('id', filter=Q(estado='activo', dining_hall__isnull=True)),
+        pendientes_medicos=Count('id', filter=Q(estado='activo', medical_checkup=False)),
     )
     total_personas = personal_counts['total']
     total_activos = personal_counts['activos']
     total_pasivos = personal_counts['pasivos']
     total_sin_foto = personal_counts['sin_foto']
+    day_start, day_end = local_day_bounds(today)
     asistencias_hoy = AttendanceRecord.objects.filter(
-        person__in=personal_qs, timestamp__date=today, record_type='entrada'
+        person__in=personal_qs, timestamp__gte=day_start, timestamp__lt=day_end, record_type='entrada'
     ).values('person_id').distinct().count()
-    rooms_qs = Room.objects.filter(organization=request.user.organization)
-    habitaciones_total = rooms_qs.count()
-    habitaciones_fuera_servicio = rooms_qs.filter(service_status='out_of_service').count()
+    room_counts = Room.objects.filter(organization=request.user.organization).aggregate(
+        total=Count('id'),
+        fuera_servicio=Count('id', filter=Q(service_status='out_of_service')),
+    )
+    habitaciones_total = room_counts['total']
+    habitaciones_fuera_servicio = room_counts['fuera_servicio']
     ocupacion = RoomAssignment.objects.filter(
         room__organization=request.user.organization, status='occupied'
     ).count()
@@ -1852,7 +1847,10 @@ def dashboard_rrhh(request):
                 raise Person.MultipleObjectsReturned
 
             # Historial de asistencia
-            historial = AttendanceRecord.objects.filter(person=persona, timestamp__date=fecha_filter)
+            filter_start, filter_end = local_day_bounds(fecha_filter)
+            historial = AttendanceRecord.objects.filter(
+                person=persona, timestamp__gte=filter_start, timestamp__lt=filter_end,
+            )
             historial = historial.select_related('recorded_by').order_by('-timestamp')[:100]
 
             # Permiso activo
@@ -1925,9 +1923,9 @@ def dashboard_rrhh(request):
         'now': now,
         'person_query': person_query,
         'search_results': search_results,
-        'sin_alojamiento': personal_qs.filter(estado='activo', room_assignment__isnull=True).count(),
-        'sin_comedor': personal_qs.filter(estado='activo', dining_hall__isnull=True).count(),
-        'pendientes_medicos': personal_qs.filter(estado='activo', medical_checkup=False).count(),
+        'sin_alojamiento': personal_counts['sin_alojamiento'],
+        'sin_comedor': personal_counts['sin_comedor'],
+        'pendientes_medicos': personal_counts['pendientes_medicos'],
         'proximos_ingresos': UpcomingEntry.objects.filter(
             organization=request.user.organization,
             expected_entry_date__range=(today, today + timedelta(days=7)),
@@ -3073,9 +3071,9 @@ def export_attendance(request):
             font_style = xlwt.XFStyle()
             
             # Consultar registros
+            range_start, range_end = local_date_range_bounds(start_date, end_date)
             registros = AttendanceRecord.objects.filter(
-                timestamp__date__gte=start_date,
-                timestamp__date__lte=end_date
+                timestamp__gte=range_start, timestamp__lt=range_end,
             ).select_related('person', 'recorded_by').order_by('person__last_name', 'timestamp')
             
             # Poblar el Excel
@@ -4475,11 +4473,12 @@ def monthly_workday_template(request):
             permission_days.add((permiso.person_id, current))
             current += timedelta(days=1)
 
+    attendance_start, attendance_end = local_date_range_bounds(start_date, end_date)
     attendance_days = set(
         AttendanceRecord.objects.filter(
             person__in=people,
-            timestamp__date__gte=start_date,
-            timestamp__date__lte=end_date,
+            timestamp__gte=attendance_start,
+            timestamp__lt=attendance_end,
             record_type='entrada',
         ).values_list('person_id', 'timestamp__date')
     )
