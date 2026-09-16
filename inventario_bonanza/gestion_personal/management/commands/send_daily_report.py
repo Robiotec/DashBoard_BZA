@@ -10,33 +10,35 @@ from django.core.files.base import ContentFile
 from django.core.mail import EmailMessage
 
 from gestion_personal.models import AttendanceRecord, VisitorRecord, VehicleRecord
+from gestion_personal.services.dates import local_day_bounds
 
 class Command(BaseCommand):
     help = 'Envía reporte diario de ingresos y salidas por correo electrónico'
 
     def handle(self, *args, **options):
         # Obtener la fecha de ayer
-        yesterday = timezone.now().date() - timedelta(days=1)
+        yesterday = timezone.localdate() - timedelta(days=1)
+        day_start, day_end = local_day_bounds(yesterday)
         fecha_str = yesterday.strftime('%d/%m/%Y')
         
         # Consultar registros de ayer
         ingresos = AttendanceRecord.objects.filter(
-            timestamp__date=yesterday,
+            timestamp__gte=day_start, timestamp__lt=day_end,
             record_type='entrada'
         ).select_related('person', 'recorded_by').order_by('timestamp')
         
         salidas = AttendanceRecord.objects.filter(
-            timestamp__date=yesterday,
+            timestamp__gte=day_start, timestamp__lt=day_end,
             record_type='salida'
         ).select_related('person', 'recorded_by').order_by('timestamp')
         
         visitantes = VisitorRecord.objects.filter(
-            fecha__date=yesterday
+            fecha__gte=day_start, fecha__lt=day_end,
         ).order_by('fecha')
         
         vehiculos = VehicleRecord.objects.filter(
-            Q(fecha_ingreso__date=yesterday) | 
-            Q(fecha_salida__date=yesterday)
+            Q(fecha_ingreso__gte=day_start, fecha_ingreso__lt=day_end)
+            | Q(fecha_salida__gte=day_start, fecha_salida__lt=day_end)
         ).order_by('fecha_ingreso')
         
         # Crear mensaje básico

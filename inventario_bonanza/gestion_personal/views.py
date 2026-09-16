@@ -2911,8 +2911,8 @@ def export_attendance(request):
             
             # Consultar visitantes
             visitantes = VisitorRecord.objects.filter(
-                fecha__date__gte=start_date,
-                fecha__date__lte=end_date
+                fecha__gte=range_start,
+                fecha__lt=range_end,
             ).order_by('fecha')
             
             # Poblar la hoja de visitantes
@@ -2943,8 +2943,8 @@ def export_attendance(request):
             
             # Consultar vehículos
             vehiculos = VehicleRecord.objects.filter(
-                Q(fecha_ingreso__date__gte=start_date, fecha_ingreso__date__lte=end_date) |
-                Q(fecha_salida__date__gte=start_date, fecha_salida__date__lte=end_date)
+                Q(fecha_ingreso__gte=range_start, fecha_ingreso__lt=range_end)
+                | Q(fecha_salida__gte=range_start, fecha_salida__lt=range_end)
             ).select_related('registrado_por').order_by('fecha_ingreso')
             
             # Poblar la hoja de vehículos
@@ -3454,7 +3454,8 @@ def dashboard_admin(request):
     """Dashboard para administradores de mina o molino"""
     user = request.user
     area = 'mina' if user.user_type == 'admin_mina' else 'molino'
-    today = timezone.now().date()
+    today = timezone.localdate()
+    day_start, day_end = local_day_bounds(today)
 
     # Obtener personal del área correspondiente
     personal = Person.objects.filter(area__icontains=area)
@@ -3664,18 +3665,18 @@ def dashboard_seguridad(request):
     
     # Registros de personal
     registros_personal = AttendanceRecord.objects.select_related('person', 'recorded_by').filter(
-        timestamp__date=today
+        timestamp__gte=day_start, timestamp__lt=day_end,
     ).filter(person__in=person_queryset_for(request.user)).order_by('-timestamp')[:RECORD_LIST_LIMIT]
     
     # Registros de visitantes
     registros_visitantes = VisitorRecord.objects.filter(
-        fecha__date=today
+        fecha__gte=day_start, fecha__lt=day_end,
     ).order_by('-fecha')[:RECORD_LIST_LIMIT]
     
     # Registros de vehículos
     registros_vehiculos = VehicleRecord.objects.select_related('organization', 'registrado_por').filter(
-        Q(fecha_ingreso__date=today) | 
-        Q(fecha_salida__date=today)
+        Q(fecha_ingreso__gte=day_start, fecha_ingreso__lt=day_end)
+        | Q(fecha_salida__gte=day_start, fecha_salida__lt=day_end)
     ).filter(organization_filter_for(request.user)).order_by('-fecha_ingreso')[:RECORD_LIST_LIMIT]
     
     # Inicializar variables para búsqueda de persona
@@ -3743,19 +3744,20 @@ def registros_por_fecha(request):
         fecha_obj = timezone.localdate()
     
     # Registros de personal
+    day_start, day_end = local_day_bounds(fecha_obj)
     registros_personal_qs = AttendanceRecord.objects.select_related('person', 'recorded_by').filter(
-        timestamp__date=fecha_obj
+        timestamp__gte=day_start, timestamp__lt=day_end,
     ).filter(person__in=person_queryset_for(request.user))
     
     # Registros de visitantes
     registros_visitantes_qs = VisitorRecord.objects.filter(
-        fecha__date=fecha_obj
+        fecha__gte=day_start, fecha__lt=day_end,
     )
     
     # Registros de vehículos
     registros_vehiculos_qs = VehicleRecord.objects.select_related('organization', 'registrado_por').filter(
-        Q(fecha_ingreso__date=fecha_obj) | 
-        Q(fecha_salida__date=fecha_obj)
+        Q(fecha_ingreso__gte=day_start, fecha_ingreso__lt=day_end)
+        | Q(fecha_salida__gte=day_start, fecha_salida__lt=day_end)
     ).filter(organization_filter_for(request.user))
 
     total_registros = (
