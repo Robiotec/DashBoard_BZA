@@ -16,6 +16,7 @@ from django.core.paginator import Paginator
 import calendar
 import csv
 import fcntl
+import hmac
 import json
 import os
 import platform
@@ -1018,7 +1019,7 @@ def _plate_lookup_api_payload(record):
 
 def api_plate_lookup(request, placa):
     token = getattr(settings, "PLATE_LOOKUP_API_TOKEN", "")
-    if token and request.headers.get("X-Plate-Lookup-Token", "") != token:
+    if token and not hmac.compare_digest(request.headers.get("X-Plate-Lookup-Token", ""), token):
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
 
     normalized = normalize_plate(placa)
@@ -1029,7 +1030,7 @@ def api_plate_lookup(request, placa):
     if record and record.lookup_status in {"completed", "completed_with_errors", "running", "pending"}:
         return JsonResponse({"ok": True, "record": _plate_lookup_api_payload(record)})
 
-    PlateLookupRecord.objects.update_or_create(
+    record, _ = PlateLookupRecord.objects.update_or_create(
         placa=normalized,
         defaults={
             "lookup_status": "pending",
@@ -1039,7 +1040,6 @@ def api_plate_lookup(request, placa):
         },
     )
     start_plate_lookup_process(normalized, None)
-    record = PlateLookupRecord.objects.filter(placa=normalized).first()
     return JsonResponse({"ok": True, "record": _plate_lookup_api_payload(record)})
 
 
@@ -1067,7 +1067,7 @@ def _person_lookup_api_payload(record):
 
 def api_person_lookup(request, cedula):
     token = getattr(settings, "PERSON_LOOKUP_API_TOKEN", "")
-    if token and request.headers.get("X-Person-Lookup-Token", "") != token:
+    if token and not hmac.compare_digest(request.headers.get("X-Person-Lookup-Token", ""), token):
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
 
     normalized = normalize_cedula(cedula)
@@ -1078,7 +1078,7 @@ def api_person_lookup(request, cedula):
     if record and record.lookup_status in {"completed", "completed_with_errors", "running", "pending"}:
         return JsonResponse({"ok": True, "record": _person_lookup_api_payload(record)})
 
-    PersonLookupRecord.objects.update_or_create(
+    record, _ = PersonLookupRecord.objects.update_or_create(
         cedula=normalized,
         defaults={
             "lookup_status": "pending",
@@ -1088,7 +1088,6 @@ def api_person_lookup(request, cedula):
         },
     )
     start_person_lookup_process(normalized, None)
-    record = PersonLookupRecord.objects.filter(cedula=normalized).first()
     return JsonResponse({"ok": True, "record": _person_lookup_api_payload(record)})
 
 
