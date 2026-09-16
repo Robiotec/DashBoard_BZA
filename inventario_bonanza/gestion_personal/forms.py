@@ -8,8 +8,18 @@ from .models import *
 
 from io import BytesIO
 from django.utils import timezone
+from datetime import timedelta
 
 ##Nuevos
+
+def default_short_period_initial():
+    today = timezone.localdate()
+    return {
+        'start_date': today,
+        'end_date': today + timedelta(days=7),
+        'fecha_inicio': today,
+        'fecha_fin': today + timedelta(days=7),
+    }
 
 class CustomUserCreationForm(UserCreationForm):
     class Meta:
@@ -187,7 +197,7 @@ class PersonForm(forms.ModelForm):
         old_photo_name = previous_person_photo_name(self.instance)
         instance = super().save(commit=False)
         instance.area = self.cleaned_data.get('area')
-        if self.forced_organization and not instance.organization_id:
+        if self.forced_organization:
             instance.organization = self.forced_organization
         if not instance.pk:
             instance.estado = 'activo'
@@ -310,15 +320,19 @@ class VacationRecordForm(forms.ModelForm):
         model = VacationRecord
         fields = ('person', 'start_date', 'end_date')
         widgets = {
-            'start_date': forms.DateInput(attrs={'type': 'date'}),
-            'end_date': forms.DateInput(attrs={'type': 'date'}),
+            'start_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'end_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
         }
     
     def __init__(self, *args, **kwargs):
         self.approved_by = kwargs.pop('approved_by', None)
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        if self.user and getattr(self.user, 'user_type', None) != 'global_admin':
+        if not self.is_bound and not self.instance.pk:
+            defaults = default_short_period_initial()
+            self.fields['start_date'].initial = self.initial.get('start_date', defaults['start_date'])
+            self.fields['end_date'].initial = self.initial.get('end_date', defaults['end_date'])
+        if self.user and (getattr(self.user, 'user_type', None) != 'global_admin' or self.user.organization_id):
             if getattr(self.user, 'organization_id', None):
                 self.fields['person'].queryset = Person.objects.filter(organization=self.user.organization).order_by('last_name', 'first_name')
             else:
@@ -343,9 +357,16 @@ class PermisoSalidaForm(forms.ModelForm):
         model = PermisoSalida
         fields = ['person', 'motivo', 'fecha_inicio', 'fecha_fin']
         widgets = {
-            'fecha_inicio': forms.DateInput(attrs={'type': 'date'}),
-            'fecha_fin': forms.DateInput(attrs={'type': 'date'}),
+            'fecha_inicio': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'fecha_fin': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
         }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound and not self.instance.pk:
+            defaults = default_short_period_initial()
+            self.fields['fecha_inicio'].initial = self.initial.get('fecha_inicio', defaults['fecha_inicio'])
+            self.fields['fecha_fin'].initial = self.initial.get('fecha_fin', defaults['fecha_fin'])
 
 class MedicalHistoryForm(forms.ModelForm):
     class Meta:
@@ -394,7 +415,7 @@ class VehicleRecordForm(forms.ModelForm):
         self.fields['chofer_nombre'].required = True
         self.fields['chofer_cedula'].required = True
         self.fields['chofer_cedula'].widget.attrs.update({'placeholder': 'Número de cédula'})
-        if self.registrado_por and self.registrado_por.user_type != 'global_admin':
+        if self.registrado_por and (self.registrado_por.user_type != 'global_admin' or self.registrado_por.organization_id):
             self.fields['organization'].widget = forms.HiddenInput()
             self.fields['organization'].initial = self.registrado_por.organization
     
@@ -402,7 +423,7 @@ class VehicleRecordForm(forms.ModelForm):
         instance = super().save(commit=False)
         if self.registrado_por:
             instance.registrado_por = self.registrado_por
-            if self.registrado_por.user_type != 'global_admin' and not instance.organization_id:
+            if (self.registrado_por.user_type != 'global_admin' or self.registrado_por.organization_id) and not instance.organization_id:
                 instance.organization = self.registrado_por.organization
         
         if commit:
@@ -480,16 +501,9 @@ class EPPAssignmentForm(forms.ModelForm):
         return instance
 
 class SanctionForm(forms.ModelForm):
-    cedula = forms.CharField(
-        label="Cédula",
-        max_length=20,
-        required=True,
-        widget=forms.TextInput(attrs={'placeholder': 'Ingrese la cédula del personal'}),
-    )
-
     class Meta:
         model = Sanction
-        fields = ['cedula', 'tipo', 'descripcion']
+        fields = ['person', 'tipo', 'descripcion']
         widgets = {
             'descripcion': forms.Textarea(attrs={'rows': 4}),
         }
@@ -498,29 +512,16 @@ class SanctionForm(forms.ModelForm):
         self.impuesta_por = kwargs.pop('impuesta_por', None)
         self.user = kwargs.pop('user', None)
         super().__init__(*args, **kwargs)
-        self.person = None
-        initial_person = self.initial.get('person')
-        if initial_person:
-            self.fields['cedula'].initial = initial_person.id_number
-            self.fields['cedula'].widget.attrs['readonly'] = True
-
-    def clean_cedula(self):
-        cedula = self.cleaned_data['cedula'].strip()
         queryset = Person.objects.all()
-        if self.user and getattr(self.user, 'user_type', None) != 'global_admin':
+        if self.user and (getattr(self.user, 'user_type', None) != 'global_admin' or self.user.organization_id):
             if getattr(self.user, 'organization_id', None):
                 queryset = queryset.filter(organization=self.user.organization)
             else:
                 queryset = queryset.filter(organization__isnull=True)
-        try:
-            self.person = queryset.get(id_number=cedula)
-        except Person.DoesNotExist:
-            raise forms.ValidationError("No existe una persona con esa cédula en esta organización.")
-        return cedula
+        self.fields['person'].queryset = queryset.filter(estado='activo').order_by('last_name', 'first_name')
     
     def save(self, commit=True):
         instance = super().save(commit=False)
-        instance.person = self.person or instance.person
         if self.impuesta_por:
             instance.impuesta_por = self.impuesta_por
         
@@ -545,7 +546,7 @@ class VisitaProgramadaForm(forms.ModelForm):
         self.programado_por = kwargs.pop('programado_por', None)
         super().__init__(*args, **kwargs)
         autorizadores = CustomUser.objects.filter(is_active=True)
-        if self.programado_por and getattr(self.programado_por, 'user_type', None) != 'global_admin':
+        if self.programado_por and (getattr(self.programado_por, 'user_type', None) != 'global_admin' or self.programado_por.organization_id):
             if getattr(self.programado_por, 'organization_id', None):
                 autorizadores = autorizadores.filter(organization=self.programado_por.organization)
             else:
@@ -586,3 +587,259 @@ class VisitaProgramadaForm(forms.ModelForm):
 # Formulario para importar Excel
 class ImportExcelForm(forms.Form):
     excel_file = forms.FileField(label='Seleccionar archivo Excel')
+
+
+class OrganizationScopedFormMixin:
+    def __init__(self, *args, organization=None, **kwargs):
+        self.organization = organization
+        super().__init__(*args, **kwargs)
+        for field in self.fields.values():
+            if isinstance(field.widget, forms.Select):
+                field.widget.attrs['class'] = 'form-select'
+            else:
+                field.widget.attrs['class'] = 'form-control'
+
+
+class RoomForm(OrganizationScopedFormMixin, forms.ModelForm):
+    class Meta:
+        model = Room
+        fields = ('camp', 'block', 'house', 'number', 'capacity', 'service_status', 'notes')
+        widgets = {'notes': forms.Textarea(attrs={'rows': 2})}
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self.organization:
+            instance.organization = self.organization
+        if commit:
+            instance.save()
+        return instance
+
+
+class DiningHallForm(OrganizationScopedFormMixin, forms.ModelForm):
+    class Meta:
+        model = DiningHall
+        fields = ('name', 'location', 'is_active')
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self.organization:
+            instance.organization = self.organization
+        if commit:
+            instance.save()
+        return instance
+
+
+class RoomAssignmentForm(OrganizationScopedFormMixin, forms.ModelForm):
+    class Meta:
+        model = RoomAssignment
+        fields = ('person', 'dining_hall', 'status', 'check_in_date', 'bed_label', 'notes')
+        widgets = {
+            'check_in_date': forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date'}),
+            'notes': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, room=None, **kwargs):
+        self.room = room
+        super().__init__(*args, **kwargs)
+        if self.organization:
+            assigned_person_ids = RoomAssignment.objects.exclude(pk=self.instance.pk).values_list('person_id', flat=True)
+            self.fields['person'].queryset = Person.objects.filter(
+                organization=self.organization, estado='activo'
+            ).exclude(id__in=assigned_person_ids).order_by('last_name', 'first_name')
+            self.fields['dining_hall'].queryset = DiningHall.objects.filter(
+                organization=self.organization, is_active=True
+            ).order_by('name')
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if self.room:
+            used = RoomAssignment.objects.filter(room=self.room).exclude(pk=self.instance.pk).count()
+            if self.room.service_status == 'out_of_service':
+                self.add_error(None, 'No se puede asignar una habitación fuera de servicio.')
+            elif used >= self.room.capacity:
+                self.add_error(None, 'La habitación ya alcanzó su capacidad total.')
+        return cleaned_data
+
+    def save(self, commit=True):
+        instance = super().save(commit=False)
+        if self.room:
+            instance.room = self.room
+        if commit:
+            instance.full_clean()
+            instance.save()
+            if instance.person.dining_hall_id != instance.dining_hall_id:
+                instance.person.dining_hall = instance.dining_hall
+                instance.person.save(update_fields=['dining_hall'])
+        return instance
+
+
+class RoomMaintenanceIssueForm(OrganizationScopedFormMixin, forms.ModelForm):
+    class Meta:
+        model = RoomMaintenanceIssue
+        fields = ('description', 'status')
+        widgets = {'description': forms.Textarea(attrs={'rows': 2})}
+
+
+HR_EVIDENCE_EXTENSIONS = ['pdf', 'jpg', 'jpeg', 'png', 'xlsx', 'xls', 'doc', 'docx']
+MONTH_OPTIONS = [(str(month), name) for month, name in enumerate(
+    ('Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+     'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'), 1
+)]
+
+
+class HRCaseFormMixin(OrganizationScopedFormMixin):
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, organization=organization, **kwargs)
+        if 'person' in self.fields:
+            self.fields['person'].queryset = Person.objects.filter(
+                organization=organization, estado='activo'
+            ).order_by('last_name', 'first_name') if organization else Person.objects.none()
+        if 'evidence' in self.fields:
+            self.fields['evidence'].validators.append(FileExtensionValidator(HR_EVIDENCE_EXTENSIONS))
+            self.fields['evidence'].widget.attrs['accept'] = '.pdf,.jpg,.jpeg,.png,.xlsx,.xls,.doc,.docx'
+        for name, field in self.fields.items():
+            if isinstance(field, forms.DateField):
+                field.widget = forms.DateInput(format='%Y-%m-%d', attrs={'type': 'date', 'class': 'form-control'})
+            elif isinstance(field.widget, forms.Textarea):
+                field.widget.attrs.setdefault('rows', 2)
+
+    def clean_evidence(self):
+        evidence = self.cleaned_data.get('evidence')
+        if evidence and getattr(evidence, 'size', 0) > 10 * 1024 * 1024:
+            raise ValidationError('El archivo no puede superar 10 MB.')
+        return evidence
+
+
+class UpcomingEntryForm(HRCaseFormMixin, forms.ModelForm):
+    class Meta:
+        model = UpcomingEntry
+        exclude = ('organization', 'created_by', 'updated_by', 'created_at', 'updated_at')
+        widgets = {'notes': forms.Textarea(attrs={'rows': 2})}
+
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, organization=organization, **kwargs)
+        self.fields['expected_entry_date'].initial = self.fields['expected_entry_date'].initial or timezone.localdate()
+        self.fields['room'].queryset = Room.objects.filter(
+            organization=organization, service_status='available'
+        ).order_by('camp', 'block', 'house', 'number') if organization else Room.objects.none()
+        self.fields['dining_hall'].queryset = DiningHall.objects.filter(
+            organization=organization, is_active=True
+        ).order_by('name') if organization else DiningHall.objects.none()
+
+    def clean(self):
+        data = super().clean()
+        if data.get('expected_exit_date') and data.get('expected_entry_date') and data['expected_exit_date'] < data['expected_entry_date']:
+            self.add_error('expected_exit_date', 'La salida no puede ser anterior al ingreso.')
+        room = data.get('room')
+        if room:
+            current_assignments = room.assignments.count()
+            future_reservations = room.upcoming_entries.exclude(pk=self.instance.pk).exclude(
+                status__in=('entered', 'cancelled')
+            ).count()
+            if current_assignments + future_reservations >= room.capacity:
+                self.add_error('room', 'La habitación no tiene camas disponibles para esta reserva.')
+        return data
+
+
+class AnnualActivityForm(HRCaseFormMixin, forms.ModelForm):
+    execution_months = forms.MultipleChoiceField(
+        choices=MONTH_OPTIONS, widget=forms.CheckboxSelectMultiple,
+        label='Meses de ejecución', required=True,
+    )
+
+    class Meta:
+        model = AnnualActivity
+        exclude = ('organization', 'created_by', 'updated_by', 'created_at', 'updated_at')
+        widgets = {'activity': forms.Textarea(attrs={'rows': 2}), 'notes': forms.Textarea(attrs={'rows': 2})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        if self.instance.pk and not self.is_bound:
+            self.initial['execution_months'] = [str(value) for value in self.instance.execution_months]
+
+    def clean_execution_months(self):
+        return sorted({int(value) for value in self.cleaned_data['execution_months']})
+
+    def clean_progress(self):
+        progress = self.cleaned_data['progress']
+        if progress > 100:
+            raise ValidationError('El avance debe estar entre 0 y 100.')
+        return progress
+
+
+class SocialBenefitCaseForm(HRCaseFormMixin, forms.ModelForm):
+    class Meta:
+        model = SocialBenefitCase
+        exclude = ('organization', 'created_by', 'updated_by', 'created_at', 'updated_at')
+        widgets = {
+            'pending_documents': forms.Textarea(attrs={'rows': 2}),
+            'pending_action': forms.Textarea(attrs={'rows': 2}),
+            'result': forms.Textarea(attrs={'rows': 2}),
+            'notes': forms.Textarea(attrs={'rows': 2}),
+        }
+
+
+class MedicalLeaveCaseForm(HRCaseFormMixin, forms.ModelForm):
+    class Meta:
+        model = MedicalLeaveCase
+        exclude = ('organization', 'created_by', 'updated_by', 'created_at', 'updated_at')
+        widgets = {
+            'administrative_restriction': forms.Textarea(attrs={'rows': 2}),
+            'follow_up_action': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        today = timezone.localdate()
+        self.fields['start_date'].initial = self.fields['start_date'].initial or today
+        self.fields['end_date'].initial = self.fields['end_date'].initial or today
+        self.fields['expected_return_date'].initial = self.fields['expected_return_date'].initial or today + timedelta(days=1)
+
+    def clean(self):
+        data = super().clean()
+        start, end, expected = data.get('start_date'), data.get('end_date'), data.get('expected_return_date')
+        if start and end and end < start:
+            self.add_error('end_date', 'La finalización no puede ser anterior al inicio.')
+        if end and expected and expected < end:
+            self.add_error('expected_return_date', 'El reintegro previsto no puede ser anterior al fin del descanso.')
+        if start and end:
+            data['days'] = (end - start).days + 1
+        return data
+
+
+class AccidentCaseForm(HRCaseFormMixin, forms.ModelForm):
+    class Meta:
+        model = AccidentCase
+        exclude = ('organization', 'created_by', 'updated_by', 'created_at', 'updated_at')
+        widgets = {
+            'return_restrictions': forms.Textarea(attrs={'rows': 2}),
+            'follow_up': forms.Textarea(attrs={'rows': 2}),
+        }
+
+    def __init__(self, *args, organization=None, **kwargs):
+        super().__init__(*args, organization=organization, **kwargs)
+        self.fields['medical_leave'].queryset = MedicalLeaveCase.objects.filter(organization=organization).select_related('person') if organization else MedicalLeaveCase.objects.none()
+        self.fields['benefit_case'].queryset = SocialBenefitCase.objects.filter(organization=organization).select_related('person') if organization else SocialBenefitCase.objects.none()
+
+    def clean(self):
+        data = super().clean()
+        start, end = data.get('leave_start_date'), data.get('leave_end_date')
+        if start and end and end < start:
+            self.add_error('leave_end_date', 'El fin del descanso no puede ser anterior al inicio.')
+        if start and end:
+            data['total_leave_days'] = (end - start).days + 1
+        total = data.get('total_leave_days') or 0
+        if (data.get('company_days') or 0) + (data.get('iess_days') or 0) > total:
+            raise ValidationError('Los días cubiertos por empresa e IESS no pueden superar el total del descanso.')
+        return data
+
+
+class HRInspectionForm(HRCaseFormMixin, forms.ModelForm):
+    class Meta:
+        model = HRInspection
+        exclude = ('organization', 'created_by', 'updated_by', 'created_at', 'updated_at')
+        widgets = {
+            'finding': forms.Textarea(attrs={'rows': 2}),
+            'corrective_action': forms.Textarea(attrs={'rows': 2}),
+            'verification_notes': forms.Textarea(attrs={'rows': 2}),
+        }

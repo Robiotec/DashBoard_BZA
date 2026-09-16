@@ -4,40 +4,114 @@
 
 {% block content %}
 <style>
-  .birthday-list-card {
-    max-width: 920px;
-    height: calc(100vh - 150px);
-    min-height: 520px;
-    display: flex;
-    flex-direction: column;
+  .birthday-shell {
+    max-width: 1360px;
   }
 
-  .birthday-list-card .card-header {
-    flex: 0 0 auto;
+  .birthday-toolbar {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 1rem;
   }
 
-  .birthday-list-card .card-body {
-    min-height: 0;
-    display: flex;
-    flex-direction: column;
+  .birthday-summary {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.75rem;
   }
 
-  .birthday-list-title {
-    flex: 0 0 auto;
-  }
-
-  .birthday-scroll {
-    flex: 1 1 auto;
-    min-height: 0;
-    overflow-y: auto;
-    padding-right: 0.35rem;
-  }
-
-  .birthday-person {
-    border-left: 5px solid #6c757d;
-    border-radius: 6px;
+  .birthday-metric {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: 0.75rem;
     background: #fff;
-    padding: 0.8rem 1rem;
+  }
+
+  .birthday-metric strong {
+    display: block;
+    font-size: 1.35rem;
+    line-height: 1.1;
+  }
+
+  .calendar-card {
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #fff;
+  }
+
+  .calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+  }
+
+  .calendar-weekday {
+    background: #212529;
+    color: #fff;
+    font-weight: 700;
+    text-align: center;
+    padding: 0.7rem 0.35rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.15);
+  }
+
+  .calendar-day {
+    min-height: 145px;
+    border-right: 1px solid #e9ecef;
+    border-bottom: 1px solid #e9ecef;
+    padding: 0.55rem;
+    background: #fff;
+  }
+
+  .calendar-day:nth-child(7n) {
+    border-right: 0;
+  }
+
+  .calendar-day-empty {
+    background: #f8f9fa;
+  }
+
+  .calendar-day-today {
+    box-shadow: inset 0 0 0 2px #0d6efd;
+  }
+
+  .calendar-day-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.4rem;
+    min-height: 1.75rem;
+    margin-bottom: 0.35rem;
+  }
+
+  .calendar-day-number {
+    font-weight: 800;
+    color: #212529;
+  }
+
+  .calendar-count {
+    border-radius: 999px;
+    background: #e7f1ff;
+    color: #0d6efd;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.15rem 0.45rem;
+  }
+
+  .birthday-chip {
+    display: block;
+    border-left: 4px solid #6c757d;
+    border-radius: 6px;
+    padding: 0.45rem 0.5rem;
+    margin-bottom: 0.4rem;
+    background: #f8f9fa;
+    text-decoration: none;
+    color: #212529;
+  }
+
+  .birthday-chip:hover {
+    background: #eef4ff;
+    color: #212529;
   }
 
   .birthday-person-mina {
@@ -52,33 +126,58 @@
     border-left-color: #6c757d;
   }
 
-  .person-name-mina {
-    color: #0d6efd;
-  }
-
-  .person-name-molino {
-    color: #198754;
-  }
-
-  .person-name-other {
-    color: #495057;
-  }
-
-  .birthday-day {
-    min-width: 3rem;
+  .birthday-name {
+    display: block;
     font-weight: 700;
-    text-align: center;
+    font-size: 0.86rem;
+    line-height: 1.2;
   }
 
-  @media (max-width: 767.98px) {
-    .birthday-list-card {
-      height: calc(100vh - 120px);
-      min-height: 460px;
+  .birthday-detail {
+    display: block;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    color: #6c757d;
+    margin-top: 0.15rem;
+  }
+
+  .birthday-empty-note {
+    color: #adb5bd;
+    font-size: 0.78rem;
+  }
+
+  @media (max-width: 991.98px) {
+    .birthday-summary {
+      grid-template-columns: 1fr;
+    }
+
+    .calendar-grid {
+      grid-template-columns: 1fr;
+    }
+
+    .calendar-weekday {
+      display: none;
+    }
+
+    .calendar-day {
+      min-height: auto;
+      border-right: 0;
+    }
+
+    .calendar-day-empty {
+      display: none;
+    }
+
+    .calendar-day-head::before {
+      content: attr(data-weekday);
+      color: #6c757d;
+      font-weight: 700;
+      margin-right: auto;
     }
   }
 </style>
 
-<div class="container-fluid py-3 overflow-hidden">
+<div class="container-fluid py-3 birthday-shell">
   <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
     <h1 class="mb-0"><i class="fas fa-cake-candles me-2"></i>Cumpleañeros</h1>
     <a href="{% url 'dashboard_rrhh' %}" class="btn btn-outline-secondary">
@@ -86,60 +185,72 @@
     </a>
   </div>
 
-  <div class="card shadow-sm birthday-list-card">
-    <div class="card-header bg-light">
-      <form method="get" class="row g-2 align-items-end">
-        <div class="col-12 col-md-5">
-          <label for="monthSelect" class="form-label mb-1">Mes</label>
-          <select id="monthSelect" name="mes" class="form-select" onchange="this.form.submit()">
-            {% for number, name in month_choices %}
-              <option value="{{ number }}" {% if number == selected_month %}selected{% endif %}>{{ name }}</option>
-            {% endfor %}
-          </select>
-        </div>
-        <div class="col-12 col-md-auto">
-          <button class="btn btn-primary" type="submit">
-            <i class="fas fa-search me-1"></i>Ver mes
-          </button>
-        </div>
-      </form>
-    </div>
-
-    <div class="card-body">
-      <div class="birthday-list-title d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-        <h5 class="mb-0">{{ selected_month_name }}</h5>
-        <div class="small text-muted">
-          <span class="me-3"><i class="fas fa-circle text-primary me-1"></i>Mina</span>
-          <span><i class="fas fa-circle text-success me-1"></i>Molino</span>
+  <div class="birthday-toolbar mb-3">
+    <form method="get" class="row g-3 align-items-end">
+      <div class="col-12 col-lg-4">
+        <label for="monthSelect" class="form-label mb-1">Mes</label>
+        <select id="monthSelect" name="mes" class="form-select" onchange="this.form.submit()">
+          {% for number, name in month_choices %}
+            <option value="{{ number }}" {% if number == selected_month %}selected{% endif %}>{{ name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-12 col-lg-auto">
+        <button class="btn btn-primary" type="submit">
+          <i class="fas fa-calendar-days me-1"></i>Ver calendario
+        </button>
+      </div>
+      <div class="col-12 col-lg">
+        <div class="birthday-summary">
+          <div class="birthday-metric">
+            <span class="text-muted small">Mes seleccionado</span>
+            <strong>{{ selected_month_name }}</strong>
+          </div>
+          <div class="birthday-metric">
+            <span class="text-muted small">Cumpleañeros</span>
+            <strong>{{ birthdays|length }}</strong>
+          </div>
+          <div class="birthday-metric">
+            <span class="text-muted small">Leyenda</span>
+            <div class="small mt-1">
+              <span class="me-2"><i class="fas fa-circle text-primary me-1"></i>Mina</span>
+              <span class="me-2"><i class="fas fa-circle text-success me-1"></i>Molino</span>
+              <span><i class="fas fa-circle text-secondary me-1"></i>Otro</span>
+            </div>
+          </div>
         </div>
       </div>
+    </form>
+  </div>
 
-      {% if birthdays %}
-        <div class="birthday-scroll d-flex flex-column gap-2">
-          {% for item in birthdays %}
-            <div class="birthday-person {{ item.area_class }}">
-              <div class="d-flex align-items-center">
-                <div class="birthday-day">{{ item.day|stringformat:"02d" }}</div>
-                <div class="flex-grow-1">
-                  <div class="fw-bold {% if item.area == 'Mina' %}person-name-mina{% elif item.area == 'Molino' %}person-name-molino{% else %}person-name-other{% endif %}">
-                    {{ item.name }}
-                  </div>
-                  <div class="small text-muted">
-                    {{ item.person.id_number }} · {{ item.area }}{% if item.person.cargo %} · {{ item.person.cargo }}{% endif %}
-                  </div>
-                </div>
-                <a href="{% url 'person_update' item.person.id %}" class="btn btn-sm btn-outline-secondary">
-                  <i class="fas fa-edit me-1"></i>Ver
-                </a>
+  <div class="calendar-card shadow-sm">
+    <div class="calendar-grid">
+      {% for weekday in weekday_labels %}
+        <div class="calendar-weekday">{{ weekday }}</div>
+      {% endfor %}
+
+      {% for week in month_weeks %}
+        {% for day in week %}
+          <div class="calendar-day {% if not day.day %}calendar-day-empty{% endif %} {% if day.is_today %}calendar-day-today{% endif %}">
+            {% if day.day %}
+              <div class="calendar-day-head" data-weekday="{{ day.weekday }}">
+                <span class="calendar-day-number">{{ day.day|stringformat:"02d" }}</span>
+                {% if day.birthdays %}
+                  <span class="calendar-count">{{ day.birthdays|length }}</span>
+                {% endif %}
               </div>
-            </div>
-          {% endfor %}
-        </div>
-      {% else %}
-        <div class="alert alert-light border mb-0">
-          No hay cumpleañeros registrados en {{ selected_month_name }}.
-        </div>
-      {% endif %}
+              {% for item in day.birthdays %}
+                <a href="{% url 'person_update' item.person.id %}" class="birthday-chip {{ item.area_class }}">
+                  <span class="birthday-name">{{ item.name }}</span>
+                  <span class="birthday-detail">{{ item.person.id_number }} · {{ item.area }}{% if item.person.cargo %} · {{ item.person.cargo }}{% endif %}</span>
+                </a>
+              {% empty %}
+                <span class="birthday-empty-note">Sin cumpleaños</span>
+              {% endfor %}
+            {% endif %}
+          </div>
+        {% endfor %}
+      {% endfor %}
     </div>
   </div>
 </div>

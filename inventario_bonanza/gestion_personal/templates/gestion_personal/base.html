@@ -8,11 +8,36 @@
     <link rel="icon" type="image/png" href="{% static 'img/logo.png' %}">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="{% static 'css/platform.css' %}">
     <style>
+        html, body {
+            height: 100%;
+        }
+        body {
+            overflow: hidden;
+            background: #fff;
+        }
+        .navbar {
+            min-height: 66px;
+        }
+        .app-shell {
+            height: calc(100vh - 66px);
+            overflow: hidden;
+        }
+        .app-row {
+            height: 100%;
+            flex-wrap: nowrap;
+        }
         .sidebar {
-            min-height: calc(100vh - 56px);
+            height: 100%;
             background-color: #343a40;
             color: white;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: sticky;
+            top: 0;
+            flex: 0 0 260px;
+            max-width: 260px;
         }
         .sidebar a {
             color: #ced4da;
@@ -33,11 +58,98 @@
             font-weight: bold;
             font-size: 1.2em;
             background-color: #212529;
+            position: sticky;
+            top: 0;
+            z-index: 2;
+        }
+        .main-panel {
+            min-width: 0;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background: #fff;
+        }
+        .content {
+            min-height: 100%;
+            padding: 1rem;
         }
         .logo-header {
             max-height: 40px;
             margin-right: 10px;
         }
+        .person-picker { position: relative; }
+        .person-picker-results {
+            position: absolute; z-index: 1080; left: 0; right: 0; top: 100%;
+            max-height: 260px; overflow-y: auto; background: #fff;
+            border: 1px solid #ced4da; border-radius: 0 0 6px 6px;
+            box-shadow: 0 8px 18px rgba(0,0,0,.14);
+        }
+        .person-picker-result {
+            display: block; width: 100%; border: 0; border-bottom: 1px solid #edf0f2;
+            background: #fff; padding: .65rem .75rem; text-align: left;
+        }
+        .person-picker-result:hover, .person-picker-result:focus { background: #eef5ff; }
+        .person-picker-result small { color: #6c757d; }
+        .person-source-select {
+            position: absolute !important; width: 1px !important; height: 1px !important;
+            opacity: .001 !important; pointer-events: none !important;
+        }
+        .rh-assistant-button {
+            position: fixed; right: 24px; bottom: 24px; z-index: 1050;
+            width: 54px; height: 54px; border-radius: 50%; border: 0;
+            background: #0d6efd; color: #fff; box-shadow: 0 6px 18px rgba(0,0,0,.24);
+            font-size: 1.25rem;
+        }
+        .rh-assistant-panel {
+            position: fixed; right: 24px; bottom: 88px; z-index: 1050;
+            width: min(390px, calc(100vw - 24px)); height: min(560px, calc(100vh - 120px));
+            background: #fff; border: 1px solid #ced4da; border-radius: 8px;
+            box-shadow: 0 12px 32px rgba(0,0,0,.24); display: flex; flex-direction: column;
+        }
+        .rh-assistant-panel[hidden] { display: none; }
+        .rh-assistant-header { padding: .8rem 1rem; background: #212529; color: #fff; display:flex; align-items:center; justify-content:space-between; border-radius: 7px 7px 0 0; }
+        .rh-assistant-history { flex:1; overflow-y:auto; padding:.85rem; background:#f5f7f9; }
+        .rh-assistant-message { max-width:88%; padding:.6rem .7rem; border-radius:6px; margin-bottom:.7rem; white-space:pre-wrap; font-size:.9rem; }
+        .rh-assistant-message.assistant { background:#fff; border:1px solid #e2e6ea; }
+        .rh-assistant-message.user { margin-left:auto; background:#0d6efd; color:#fff; }
+        .rh-assistant-input { padding:.75rem; border-top:1px solid #dee2e6; }
+        .modal {
+            z-index: 1090;
+        }
+        .modal-backdrop {
+            z-index: 1085;
+        }
+        .modal-dialog-scrollable .modal-body,
+        .modal-body {
+            max-height: calc(100vh - 190px);
+            overflow-y: auto;
+        }
+        @media(max-width:767.98px) {
+            body {
+                overflow: auto;
+            }
+            .app-shell {
+                height: auto;
+                min-height: calc(100vh - 66px);
+                overflow: visible;
+            }
+            .app-row {
+                height: auto;
+                flex-wrap: wrap;
+            }
+            .sidebar {
+                position: relative;
+                height: auto;
+                max-height: 42vh;
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+            .main-panel {
+                height: auto;
+                overflow: visible;
+            }
+        }
+        @media(max-width:575px) { .rh-assistant-panel { right:12px; bottom:80px; width:calc(100vw - 24px); } .rh-assistant-button { right:16px; bottom:16px; } }
     </style>
     {% block extra_css %}{% endblock %}
 </head>
@@ -80,10 +192,10 @@
         </div>
     </nav>
 
-    <div class="container-fluid">
-        <div class="row">
+    <div class="container-fluid app-shell">
+        <div class="row app-row">
             {% if user.is_authenticated %}
-                <div class="col-md-2 p-0 sidebar">
+                <aside class="col-md-2 p-0 sidebar">
                     <div class="header">Panel de Control</div>
                     {% if user.user_type == 'global_admin' %}
                         <a href="{% url 'dashboard_global_admin' %}" class="{% if 'global/dashboard' in request.path %}active{% endif %}">
@@ -98,6 +210,21 @@
                         <a href="{% url 'global_records' %}" class="{% if 'global/registros' in request.path %}active{% endif %}">
                             <i class="fas fa-clipboard-list me-2"></i>Registros
                         </a>
+                        <a href="{% url 'visitas_programadas' %}" class="{% if 'visitas-programadas' in request.path %}active{% endif %}">
+                            <i class="fas fa-calendar-check me-2"></i>Visitas
+                        </a>
+                        {% if user.organization_id %}
+                        <a href="{% url 'hr_management_dashboard' %}" class="{% if '/rh/gestion/' in request.path %}active{% endif %}">
+                            <i class="fas fa-people-roof me-2"></i>Gestión RRHH
+                        </a>
+                        <a href="{% url 'accommodation_rack' %}" class="{% if '/rh/alojamiento/' in request.path %}active{% endif %}">
+                            <i class="fas fa-bed me-2"></i>Alojamiento
+                        </a>
+                        <a href="{% url 'dining_hall_management' %}" class="{% if '/rh/comedores/' in request.path %}active{% endif %}">
+                            <i class="fas fa-utensils me-2"></i>Comedores
+                        </a>
+                        {% endif %}
+                        {% if not user.organization_id %}
                         <a href="{% url 'global_plate_lookup' %}" class="{% if 'global/placas' in request.path %}active{% endif %}">
                             <i class="fas fa-car me-2"></i>Consulta Placas
                         </a>
@@ -110,6 +237,7 @@
                         <a href="{% url 'global_user_list' %}" class="{% if 'global/usuarios' in request.path %}active{% endif %}">
                             <i class="fas fa-user-shield me-2"></i>Usuarios
                         </a>
+                        {% endif %}
                     {% elif user.user_type == 'medico' %}
                         <a href="{% url 'dashboard_medico' %}" class="{% if request.path == '/medico/dashboard/' %}active{% endif %}">
                             <i class="fas fa-tachometer-alt me-2"></i>Dashboard
@@ -121,12 +249,14 @@
                             <i class="fas fa-notes-medical me-2"></i>Nueva Consulta
                         </a>
                     {% elif user.user_type == 'rh' %}
+                        <div class="sidebar-section">Resumen</div>
                         <a href="{% url 'dashboard_rrhh' %}" class="{% if 'rh/dashboard' in request.path %}active{% endif %}">
                             <i class="fas fa-chart-line me-2"></i>Dashboard
                         </a>
-                        <a href="{% url 'rh_chatbot' %}" class="{% if 'rh/asistente' in request.path %}active{% endif %}">
-                            <i class="fas fa-comments me-2"></i>Asistente RRHH
+                        <a href="{% url 'hr_management_dashboard' %}" class="{% if '/rh/gestion/' in request.path %}active{% endif %}">
+                            <i class="fas fa-people-roof me-2"></i>Gestión integral
                         </a>
+                        <div class="sidebar-section">Personal</div>
                         <a href="{% url 'rh_birthdays' %}" class="{% if 'rh/cumpleaneros' in request.path %}active{% endif %}">
                             <i class="fas fa-cake-candles me-2"></i>Cumpleañeros
                         </a>
@@ -142,6 +272,21 @@
                         <a href="{% url 'registrar_sancion' %}" class="{% if 'rh/sanciones' in request.path %}active{% endif %}">
                             <i class="fas fa-gavel me-2"></i>Sanciones
                         </a>
+                        <div class="sidebar-section">Servicios de campamento</div>
+                        <a href="{% url 'accommodation_rack' %}" class="{% if 'rh/alojamiento' in request.path %}active{% endif %}">
+                            <i class="fas fa-bed me-2"></i>Alojamiento
+                        </a>
+                        <a href="{% url 'dining_hall_management' %}" class="{% if 'rh/comedores' in request.path %}active{% endif %}">
+                            <i class="fas fa-utensils me-2"></i>Comedores
+                        </a>
+                        <div class="sidebar-section">Planificación y seguimiento</div>
+                        <a href="{% url 'hr_module' 'ingresos' %}" class="{% if '/gestion/ingresos/' in request.path %}active{% endif %}"><i class="fas fa-person-walking-arrow-right me-2"></i>Próximos ingresos</a>
+                        <a href="{% url 'hr_module' 'cronograma' %}" class="{% if '/gestion/cronograma/' in request.path %}active{% endif %}"><i class="fas fa-calendar-check me-2"></i>Cronograma anual</a>
+                        <a href="{% url 'hr_module' 'subsidios' %}" class="{% if '/gestion/subsidios/' in request.path %}active{% endif %}"><i class="fas fa-hand-holding-medical me-2"></i>Subsidios</a>
+                        <a href="{% url 'hr_module' 'descansos' %}" class="{% if '/gestion/descansos/' in request.path %}active{% endif %}"><i class="fas fa-briefcase-medical me-2"></i>Descansos médicos</a>
+                        <a href="{% url 'hr_module' 'accidentes' %}" class="{% if '/gestion/accidentes/' in request.path %}active{% endif %}"><i class="fas fa-triangle-exclamation me-2"></i>Accidentes</a>
+                        <a href="{% url 'hr_module' 'inspecciones' %}" class="{% if '/gestion/inspecciones/' in request.path %}active{% endif %}"><i class="fas fa-clipboard-check me-2"></i>Inspecciones</a>
+                        <div class="sidebar-section">Operación</div>
                         <a href="{% url 'visitas_programadas' %}" class="{% if 'visitas-programadas' in request.path %}active{% endif %}">
                             <i class="fas fa-calendar-check me-2"></i>Visitas Programadas
                         </a>
@@ -191,8 +336,8 @@
                             <i class="fas fa-tachometer-alt me-2"></i>Dashboard
                         </a>
                     {% endif %}
-                </div>
-                <div class="col-md-10">
+                </aside>
+                <main class="col main-panel">
                     <div class="content">
                         {% if messages %}
                             {% for message in messages %}
@@ -204,9 +349,10 @@
                         {% endif %}
                         {% block content %}{% endblock %}
                     </div>
-                </div>
+                </main>
             {% else %}
-                <div class="col-12 content">
+                <main class="col-12 main-panel">
+                    <div class="content">
                     {% if messages %}
                         {% for message in messages %}
                             <div class="alert alert-{{ message.tags }} alert-dismissible fade show">
@@ -216,13 +362,114 @@
                         {% endfor %}
                     {% endif %}
                     {% block content_not_authenticated %}{% endblock %}
-                </div>
+                    </div>
+                </main>
             {% endif %}
         </div>
     </div>
 
+    {% if user.is_authenticated and user.user_type == 'rh' %}
+    <button type="button" class="rh-assistant-button" id="rhAssistantToggle" title="Abrir asistente de RRHH" aria-label="Abrir asistente de RRHH" aria-expanded="false"><i class="fas fa-comments"></i></button>
+    <section class="rh-assistant-panel" id="rhAssistantPanel" aria-label="Asistente de RRHH" hidden>
+      <div class="rh-assistant-header"><div><i class="fas fa-comments me-2"></i><strong>Asistente RRHH</strong></div><button type="button" class="btn btn-sm text-white" id="rhAssistantClose" title="Cerrar"><i class="fas fa-times"></i></button></div>
+      <div class="rh-assistant-history" id="rhAssistantHistory"><div class="rh-assistant-message assistant">Consulta personal, vacaciones, permisos, sanciones o asistencia por nombre o cédula.</div></div>
+      <form class="rh-assistant-input" id="rhAssistantForm">{% csrf_token %}<div class="input-group"><input type="text" class="form-control" id="rhAssistantInput" placeholder="Escribe una consulta..." autocomplete="off" required><button class="btn btn-primary" type="submit" title="Enviar"><i class="fas fa-paper-plane"></i></button></div></form>
+    </section>
+    {% endif %}
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+    (() => {
+      const normalize = (value) => (value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const closeAll = (except) => document.querySelectorAll('.person-picker-results').forEach((item) => {
+        if (item !== except) item.classList.add('d-none');
+      });
+
+      document.querySelectorAll('select[name="person"]').forEach((select, index) => {
+        if (select.dataset.searchReady === 'true') return;
+        select.dataset.searchReady = 'true';
+        select.classList.add('person-source-select');
+
+        const options = Array.from(select.options).filter((option) => option.value).map((option) => ({
+          value: option.value,
+          label: option.textContent.trim(),
+          search: normalize(option.textContent),
+        }));
+        const wrapper = document.createElement('div');
+        wrapper.className = 'person-picker';
+        wrapper.innerHTML = `<div class="input-group"><span class="input-group-text"><i class="fas fa-search"></i></span><input type="search" class="form-control" autocomplete="off" placeholder="Buscar por nombre o cédula" aria-label="Buscar persona por nombre o cédula"></div><div class="person-picker-results d-none"></div><div class="form-text person-picker-help">Escriba al menos 2 caracteres y seleccione un resultado.</div>`;
+        select.insertAdjacentElement('afterend', wrapper);
+        const input = wrapper.querySelector('input');
+        const results = wrapper.querySelector('.person-picker-results');
+        const help = wrapper.querySelector('.person-picker-help');
+        const selectedOption = select.options[select.selectedIndex];
+        if (selectedOption && selectedOption.value) {
+          input.value = selectedOption.textContent.trim();
+          help.textContent = 'Persona seleccionada.';
+        }
+
+        const render = () => {
+          const query = normalize(input.value.trim());
+          select.value = '';
+          help.textContent = 'Seleccione una persona de los resultados.';
+          if (query.length < 2) { results.classList.add('d-none'); return; }
+          const matches = options.filter((option) => query.split(/\s+/).every((term) => option.search.includes(term))).slice(0, 25);
+          results.innerHTML = matches.length
+            ? matches.map((option) => `<button type="button" class="person-picker-result" data-value="${option.value}">${option.label}</button>`).join('')
+            : '<div class="p-3 text-muted">No se encontraron personas por nombre o cédula.</div>';
+          closeAll(results);
+          results.classList.remove('d-none');
+        };
+        input.addEventListener('input', render);
+        input.addEventListener('focus', () => { if (input.value.trim().length >= 2 && !select.value) render(); });
+        results.addEventListener('click', (event) => {
+          const button = event.target.closest('[data-value]');
+          if (!button) return;
+          select.value = button.dataset.value;
+          input.value = button.textContent.trim();
+          input.setCustomValidity('');
+          help.textContent = 'Persona seleccionada.';
+          results.classList.add('d-none');
+          select.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+        select.form?.addEventListener('submit', (event) => {
+          if (select.required && !select.value) {
+            event.preventDefault();
+            input.setCustomValidity('Busque y seleccione una persona por nombre o cédula.');
+            input.reportValidity();
+          } else input.setCustomValidity('');
+        });
+      });
+      document.addEventListener('click', (event) => { if (!event.target.closest('.person-picker')) closeAll(); });
+    })();
+    </script>
+    {% if user.is_authenticated and user.user_type == 'rh' %}
+    <script>
+    (() => {
+      const toggle = document.getElementById('rhAssistantToggle');
+      const panel = document.getElementById('rhAssistantPanel');
+      const close = document.getElementById('rhAssistantClose');
+      const form = document.getElementById('rhAssistantForm');
+      const input = document.getElementById('rhAssistantInput');
+      const history = document.getElementById('rhAssistantHistory');
+      const csrf = form.querySelector('[name=csrfmiddlewaretoken]').value;
+      const setOpen = (open) => { panel.hidden = !open; toggle.setAttribute('aria-expanded', String(open)); if (open) input.focus(); };
+      toggle.addEventListener('click', () => setOpen(panel.hidden));
+      close.addEventListener('click', () => setOpen(false));
+      const addMessage = (role, message) => { const item=document.createElement('div'); item.className=`rh-assistant-message ${role}`; item.textContent=message; history.appendChild(item); history.scrollTop=history.scrollHeight; return item; };
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const message=input.value.trim(); if (!message) return;
+        input.value=''; addMessage('user', message); const pending=addMessage('assistant', 'Consultando...');
+        const button=form.querySelector('button'); button.disabled=true;
+        try { const body=new URLSearchParams({message}); const response=await fetch('{% url "rh_chatbot_api" %}', {method:'POST', headers:{'X-CSRFToken':csrf,'Content-Type':'application/x-www-form-urlencoded;charset=UTF-8'}, body}); const data=await response.json(); pending.textContent=data.answer || 'No pude procesar la consulta.'; }
+        catch (error) { pending.textContent='No pude conectar con el asistente.'; }
+        finally { button.disabled=false; input.focus(); }
+      });
+    })();
+    </script>
+    {% endif %}
     {% block extra_js %}{% endblock %}
 </body>
 </html>

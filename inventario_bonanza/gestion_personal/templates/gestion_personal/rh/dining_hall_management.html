@@ -1,0 +1,50 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Gestión de comedores - RRHH{% endblock %}
+
+{% block extra_css %}
+<style>
+  .dining-page { padding:1.5rem 0 2rem; }
+  .page-heading { display:flex; justify-content:space-between; gap:1rem; align-items:flex-start; margin-bottom:1.25rem; }
+  .page-heading h1 { font-size:1.65rem; font-weight:700; margin:0; }
+  .metric-box { border:1px solid #dee2e6; border-left:4px solid var(--accent); border-radius:6px; padding:1rem; background:#fff; height:100%; }
+  .metric-box strong { display:block; font-size:1.55rem; }
+  .filter-bar { border:1px solid #dee2e6; background:#f8f9fa; border-radius:6px; padding:1rem; }
+  .person-name { font-weight:600; }
+  .assignment-select { min-width:190px; }
+  @media(max-width:767px){ .page-heading{flex-direction:column}.people-table{min-width:820px} }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="dining-page">
+  <div class="page-heading">
+    <div><h1><i class="fas fa-utensils me-2 text-primary"></i>Gestión de comedores</h1><p class="text-muted mb-0">Consulta y asigna el comedor de alimentación de cada colaborador.</p></div>
+    <div class="d-flex gap-2"><a href="{% url 'accommodation_rack' %}" class="btn btn-outline-secondary"><i class="fas fa-bed me-1"></i>Alojamiento</a><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#newDining"><i class="fas fa-plus me-1"></i>Nuevo comedor</button></div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="metric-box" style="--accent:#0d6efd"><span>Personal activo</span><strong>{{ total_active }}</strong></div></div>
+    <div class="col-md-4"><div class="metric-box" style="--accent:#dc3545"><span>Sin comedor asignado</span><strong>{{ without_dining }}</strong><a class="small" href="?dining_hall=none">Revisar pendientes</a></div></div>
+    <div class="col-md-4"><div class="metric-box" style="--accent:#198754"><span>Comedores activos</span><strong>{{ dining_halls|length }}</strong></div></div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    {% for hall in dining_halls %}<div class="col-sm-6 col-xl-3"><div class="border rounded p-3 h-100"><div class="d-flex justify-content-between gap-2"><a href="?dining_hall={{ hall.id }}" class="text-decoration-none text-dark"><strong>{{ hall.name }}</strong></a><span class="badge {% if hall.is_active %}bg-success{% else %}bg-secondary{% endif %}">{{ hall.diner_count }}</span></div><small class="text-muted d-block mb-3">{{ hall.location|default:'Ubicación no registrada' }}</small><div class="d-flex gap-2"><button class="btn btn-sm btn-outline-primary flex-fill" data-bs-toggle="modal" data-bs-target="#editDining{{ hall.id }}"><i class="fas fa-pen me-1"></i>Editar</button><form method="post" action="{% url 'dining_hall_delete' hall.id %}" onsubmit="return confirm('¿Eliminar el comedor {{ hall.name }}? Las personas asignadas quedarán sin comedor.')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" title="Eliminar comedor"><i class="fas fa-trash"></i></button></form></div></div></div>{% empty %}<div class="col-12 text-muted">Registre el primer comedor para comenzar.</div>{% endfor %}
+  </div>
+
+  <form method="get" class="filter-bar row g-2 align-items-end mb-3">
+    <div class="col-md-6"><label class="form-label">Buscar colaborador</label><div class="input-group"><span class="input-group-text"><i class="fas fa-search"></i></span><input name="q" value="{{ query }}" class="form-control" placeholder="Nombre, apellido o cédula" autocomplete="off"></div></div>
+    <div class="col-md-4"><label class="form-label">Comedor asignado</label><select name="dining_hall" class="form-select"><option value="">Todos</option><option value="none" {% if hall_filter == 'none' %}selected{% endif %}>Sin comedor</option>{% for hall in dining_halls %}<option value="{{ hall.id }}" {% if hall_filter == hall.id|stringformat:'s' %}selected{% endif %}>{{ hall.name }}</option>{% endfor %}</select></div>
+    <div class="col-md-2 d-flex gap-2"><button class="btn btn-dark flex-fill">Buscar</button><a href="{% url 'dining_hall_management' %}" class="btn btn-outline-secondary"><i class="fas fa-times"></i></a></div>
+  </form>
+
+  <div class="card"><div class="table-responsive"><table class="table table-hover align-middle mb-0 people-table"><thead class="table-light"><tr><th>Colaborador</th><th>Cédula</th><th>Área / cargo</th><th>Alojamiento</th><th>Comedor actual</th><th>Gestión</th></tr></thead><tbody>
+    {% for person in people %}<tr><td class="person-name">{{ person.first_name }} {{ person.last_name }}</td><td>{{ person.id_number }}</td><td>{{ person.area|default:'---' }}<br><small class="text-muted">{{ person.cargo|default:'Sin cargo' }}</small></td><td>{% if person.room_assignment %}Hab. {{ person.room_assignment.room.number }} · {{ person.room_assignment.room.block }}{% else %}<span class="text-muted">Sin alojamiento</span>{% endif %}</td><td>{% if person.dining_hall %}<span class="badge bg-success">{{ person.dining_hall.name }}</span>{% else %}<span class="badge bg-danger">Sin asignar</span>{% endif %}</td><td><form method="post" action="{% url 'person_dining_hall_update' person.id %}" class="d-flex flex-wrap gap-2">{% csrf_token %}<input type="hidden" name="q" value="{{ query }}"><input type="hidden" name="filter" value="{{ hall_filter }}"><select name="dining_hall" class="form-select form-select-sm assignment-select"><option value="">Sin comedor</option>{% for hall in dining_halls %}{% if hall.is_active %}<option value="{{ hall.id }}" {% if person.dining_hall_id == hall.id %}selected{% endif %}>{{ hall.name }}</option>{% endif %}{% endfor %}</select><select name="assignment_status" class="form-select form-select-sm" style="width:auto"><option value="active">Activo</option><option value="temporary">Temporal</option><option value="pending_change">Cambio pendiente</option><option value="finished">Finalizado</option></select><input type="date" name="start_date" value="{% now 'Y-m-d' %}" class="form-control form-control-sm" style="width:auto" title="Inicio de vigencia"><button class="btn btn-sm btn-primary" title="Guardar asignación"><i class="fas fa-save"></i></button></form></td></tr>
+    {% empty %}<tr><td colspan="6" class="text-center text-muted py-5">No se encontraron colaboradores con estos filtros.</td></tr>{% endfor %}
+  </tbody></table></div></div>
+</div>
+
+<div class="modal fade" id="newDining" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'dining_hall_create' %}">{% csrf_token %}<input type="hidden" name="next" value="dining"><div class="modal-header"><h5 class="modal-title">Nuevo comedor</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">{{ dining_hall_form.as_p }}</div><div class="modal-footer"><button class="btn btn-primary">Guardar comedor</button></div></form></div></div></div>
+{% for hall in dining_halls %}<div class="modal fade" id="editDining{{ hall.id }}" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'dining_hall_update' hall.id %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Editar comedor</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label">Nombre</label><input name="name" value="{{ hall.name }}" class="form-control" required></div><div class="mb-3"><label class="form-label">Ubicación</label><input name="location" value="{{ hall.location }}" class="form-control"></div><div class="form-check"><input type="checkbox" name="is_active" class="form-check-input" id="active{{ hall.id }}" {% if hall.is_active %}checked{% endif %}><label class="form-check-label" for="active{{ hall.id }}">Comedor activo</label></div></div><div class="modal-footer"><button class="btn btn-primary">Guardar cambios</button></div></form></div></div></div>{% endfor %}
+{% endblock %}

@@ -1,5 +1,6 @@
 from django.urls import path
 from . import views
+from . import hr_management
 from django.views.generic.base import RedirectView
 
 urlpatterns = [
@@ -52,6 +53,11 @@ urlpatterns = [
     
     # Panel de RRHH
     path('rh/dashboard/', views.dashboard_rrhh, name='dashboard_rrhh'),
+    path('rh/gestion/', hr_management.hr_management_dashboard, name='hr_management_dashboard'),
+    path('rh/gestion/<slug:module>/', hr_management.hr_module, name='hr_module'),
+    path('rh/gestion/<slug:module>/<int:pk>/eliminar/', hr_management.hr_module_delete, name='hr_module_delete'),
+    path('rh/gestion/<slug:module>/exportar/<slug:output_format>/', hr_management.hr_module_export, name='hr_module_export'),
+    path('rh/gestion/<slug:module>/<int:pk>/evidencia/', hr_management.hr_evidence, name='hr_evidence'),
     path('rh/asistente/', views.rh_chatbot, name='rh_chatbot'),
     path('rh/asistente/api/', views.rh_chatbot_api, name='rh_chatbot_api'),
     path('rh/cumpleaneros/', views.rh_birthdays, name='rh_birthdays'),
@@ -59,6 +65,19 @@ urlpatterns = [
     path('rh/personas/nueva/', views.PersonCreateView.as_view(), name='person_create'),
     path('rh/personas/<int:pk>/editar/', views.PersonUpdateView.as_view(), name='person_update'),
     path('rh/personas/<int:pk>/eliminar/', views.PersonDeleteView.as_view(), name='person_delete'),
+    path('rh/alojamiento/', views.accommodation_rack, name='accommodation_rack'),
+    path('rh/alojamiento/buscar-personal/', views.rh_person_search, name='rh_person_search'),
+    path('rh/comedores/', views.dining_hall_management, name='dining_hall_management'),
+    path('rh/comedores/personas/<int:person_id>/asignar/', views.person_dining_hall_update, name='person_dining_hall_update'),
+    path('rh/alojamiento/habitaciones/nueva/', views.accommodation_room_create, name='accommodation_room_create'),
+    path('rh/alojamiento/habitaciones/<int:room_id>/editar/', views.accommodation_room_update, name='accommodation_room_update'),
+    path('rh/alojamiento/habitaciones/<int:room_id>/eliminar/', views.accommodation_room_delete, name='accommodation_room_delete'),
+    path('rh/alojamiento/comedores/nuevo/', views.dining_hall_create, name='dining_hall_create'),
+    path('rh/alojamiento/comedores/<int:dining_hall_id>/editar/', views.dining_hall_update, name='dining_hall_update'),
+    path('rh/alojamiento/comedores/<int:dining_hall_id>/eliminar/', views.dining_hall_delete, name='dining_hall_delete'),
+    path('rh/alojamiento/habitaciones/<int:room_id>/asignar/', views.room_assignment_save, name='room_assignment_save'),
+    path('rh/alojamiento/asignaciones/<int:assignment_id>/liberar/', views.room_assignment_delete, name='room_assignment_delete'),
+    path('rh/alojamiento/habitaciones/<int:room_id>/mantenimiento/', views.room_maintenance_create, name='room_maintenance_create'),
     path('rh/crear-permiso/', views.crear_permiso, name='crear_permiso'),
     path('rh/cancelar-permiso/<int:permiso_id>/', views.cancelar_permiso, name='cancelar_permiso'),
     path('rh/crear-vacaciones/', views.crear_vacaciones, name='crear_vacaciones'),

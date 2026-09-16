@@ -1,0 +1,86 @@
+{% extends "gestion_personal/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}{{ config.title }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .module-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: .25rem; }
+  .module-tabs .btn { white-space: nowrap; }
+  .records-viewport { max-height: calc(100vh - 355px); min-height: 280px; overflow: auto; }
+  .record-title { min-width: 210px; }
+  .record-actions { white-space: nowrap; }
+  #div_id_execution_months > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; }
+  #div_id_execution_months .form-check { margin: 0; }
+  @media (max-width: 768px) { .records-viewport { max-height: none; } #div_id_execution_months > div { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+    <div><div class="small text-uppercase text-muted fw-semibold">Gestión integral</div><h1 class="h3 mb-0"><i class="fas {{ config.icon }} me-2 text-primary"></i>{{ config.title }}</h1></div>
+    <div class="d-flex gap-2"><a href="{% url 'hr_management_dashboard' %}" class="btn btn-outline-secondary"><i class="fas fa-chart-column me-1"></i>Indicadores</a><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordModal"><i class="fas fa-plus me-1"></i>Nuevo registro</button></div>
+  </div>
+
+  <div class="d-flex gap-2 module-tabs mb-3">
+    {% for key, item in modules.items %}<a href="{% url 'hr_module' key %}" class="btn {% if key == module %}btn-primary{% else %}btn-outline-secondary{% endif %} btn-sm"><i class="fas {{ item.icon }} me-1"></i>{{ item.title }}</a>{% endfor %}
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-body py-3">
+      <form method="get" class="row g-2 align-items-end">
+        <div class="col-md-4"><label class="form-label small">Búsqueda rápida</label><div class="input-group"><span class="input-group-text"><i class="fas fa-search"></i></span><input type="search" name="q" value="{{ request.GET.q }}" class="form-control" placeholder="Nombre, cédula o texto del registro"></div></div>
+        <div class="col-sm-6 col-md-2"><label class="form-label small">Desde</label><input type="date" name="date_from" value="{{ request.GET.date_from }}" class="form-control"></div>
+        <div class="col-sm-6 col-md-2"><label class="form-label small">Hasta</label><input type="date" name="date_to" value="{{ request.GET.date_to }}" class="form-control"></div>
+        <div class="col-sm-6 col-md-2"><label class="form-label small">Estado</label><select name="status" class="form-select"><option value="">Todos</option>{% for value, label in status_choices %}<option value="{{ value }}" {% if request.GET.status == value %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <div class="col-sm-6 col-md-2 d-flex gap-2"><button class="btn btn-primary flex-grow-1" title="Aplicar filtros"><i class="fas fa-filter"></i></button><a href="{% url 'hr_module' module %}" class="btn btn-outline-secondary" title="Limpiar filtros"><i class="fas fa-rotate-left"></i></a></div>
+        {% if departments %}<div class="col-md-3"><label class="form-label small">Departamento</label><select name="department" class="form-select"><option value="">Todos</option>{% for value in departments %}<option value="{{ value }}" {% if request.GET.department == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>{% endif %}
+        {% if camps %}<div class="col-md-3"><label class="form-label small">Campamento</label><select name="camp" class="form-select"><option value="">Todos</option>{% for value in camps %}<option value="{{ value }}" {% if request.GET.camp == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>{% endif %}
+        {% if companies %}<div class="col-md-3"><label class="form-label small">Empresa</label><select name="company" class="form-select"><option value="">Todas</option>{% for value in companies %}<option value="{{ value }}" {% if request.GET.company == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>{% endif %}
+        {% if groups %}<div class="col-md-3"><label class="form-label small">Turno o grupo</label><select name="group" class="form-select"><option value="">Todos</option>{% for value in groups %}<option value="{{ value }}" {% if request.GET.group == value %}selected{% endif %}>{{ value }}</option>{% endfor %}</select></div>{% endif %}
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2"><strong>{{ records|length }} registro{{ records|length|pluralize }}</strong><div class="btn-group btn-group-sm"><a href="{% url 'hr_module_export' module 'xlsx' %}?{{ request.GET.urlencode }}" class="btn btn-outline-success"><i class="fas fa-file-excel me-1"></i>Excel</a><a href="{% url 'hr_module_export' module 'pdf' %}?{{ request.GET.urlencode }}" class="btn btn-outline-danger"><i class="fas fa-file-pdf me-1"></i>PDF</a><a href="{% url 'hr_module_export' module 'csv' %}?{{ request.GET.urlencode }}" class="btn btn-outline-secondary">CSV</a></div></div>
+    <div class="table-responsive records-viewport">
+      <table class="table table-hover align-middle mb-0">
+        <thead class="sticky-top"><tr>
+          {% if module == 'ingresos' %}<th>Ingreso / colaborador</th><th>Organización laboral</th><th>Requisitos</th><th>Servicios previstos</th><th>Estado</th>
+          {% elif module == 'cronograma' %}<th>Actividad</th><th>Responsable / población</th><th>Planificación</th><th>Avance</th><th>Estado</th>
+          {% elif module == 'subsidios' %}<th>Fecha / colaborador</th><th>Gestión</th><th>Documentación</th><th>Seguimiento</th><th>Estado</th>
+          {% elif module == 'descansos' %}<th>Colaborador</th><th>Periodo</th><th>Retorno</th><th>Seguimiento</th><th>Estado</th>
+          {% elif module == 'accidentes' %}<th>Evento / colaborador</th><th>Descanso</th><th>Cobertura</th><th>Reincorporación</th><th>Trámite</th>
+          {% elif module == 'inspecciones' %}<th>Inspección</th><th>Hallazgo</th><th>Acción / responsable</th><th>Plazo</th><th>Estado</th>{% endif %}
+          <th class="text-end">Acciones</th>
+        </tr></thead>
+        <tbody>
+          {% for record in records %}<tr>
+            {% if module == 'ingresos' %}
+              <td class="record-title"><strong>{{ record.expected_entry_date|date:"d/m/Y" }}</strong><br>{{ record.first_name }} {{ record.last_name }}<div class="small text-muted">{{ record.id_number }} · {{ record.company|default:"Sin empresa" }}</div></td><td>{{ record.position|default:"Sin cargo" }}<div class="small text-muted">{{ record.department|default:"Sin departamento" }} · {{ record.shift_group|default:"Sin grupo" }}<br>{{ record.destination_camp }}</div></td><td>{% if record.requirements_complete %}<span class="badge bg-success">Completos</span>{% else %}<span class="badge bg-warning text-dark">Pendientes</span>{% endif %}</td><td><div><i class="fas fa-bed me-1 text-muted"></i>{{ record.room|default:"Sin habitación" }}</div><div><i class="fas fa-utensils me-1 text-muted"></i>{{ record.dining_hall|default:"Sin comedor" }}</div></td><td><span class="badge bg-secondary">{{ record.get_status_display }}</span></td>
+            {% elif module == 'cronograma' %}
+              <td class="record-title"><strong>{{ record.action_line }}</strong><div class="small text-muted">{{ record.activity|truncatechars:100 }}</div></td><td>{{ record.responsible }}<div class="small text-muted">{{ record.target_population|default:"Sin población definida" }}</div></td><td>{% if record.planned_date %}{{ record.planned_date|date:"d/m/Y" }}{% else %}Meses: {{ record.execution_months|join:", " }}{% endif %}<div class="small text-muted">Límite {{ record.due_date|date:"d/m/Y"|default:"Sin fecha" }}</div></td><td><div class="progress" style="height:8px"><div class="progress-bar" style="width:{{ record.progress }}%"></div></div><small>{{ record.progress }}%</small></td><td><span class="badge bg-secondary">{{ record.get_status_display }}</span></td>
+            {% elif module == 'subsidios' %}
+              <td class="record-title"><strong>{{ record.case_date|date:"d/m/Y" }}</strong><br>{{ record.person.first_name }} {{ record.person.last_name }}<div class="small text-muted">{{ record.person.id_number }} · {{ record.person.area|default:"Sin área" }}</div></td><td>{{ record.management_type }}</td><td>{{ record.required_document|default:"Sin documento definido" }}<div class="small text-danger">{{ record.pending_documents|default:"Sin pendientes"|truncatechars:90 }}</div></td><td>{{ record.responsible }}<div class="small text-muted">{{ record.pending_action|default:"Sin acción pendiente"|truncatechars:90 }}</div></td><td><span class="badge bg-secondary">{{ record.get_status_display }}</span></td>
+            {% elif module == 'descansos' %}
+              <td class="record-title"><strong>{{ record.person.first_name }} {{ record.person.last_name }}</strong><div class="small text-muted">{{ record.person.id_number }} · {{ record.person.departamento|default:"Sin departamento" }}</div></td><td>{{ record.start_date|date:"d/m/Y" }} - {{ record.end_date|date:"d/m/Y" }}<div class="small text-muted">{{ record.days }} días · {{ record.get_reason_display }}</div></td><td>Previsto: {{ record.expected_return_date|date:"d/m/Y" }}<div class="small">Alta: {% if record.clearance_validated %}<span class="text-success">validada</span>{% else %}<span class="text-warning">pendiente</span>{% endif %}</div></td><td>{{ record.responsible }}<div class="small text-muted">{{ record.follow_up_action|default:"Sin acción"|truncatechars:80 }}</div></td><td><span class="badge bg-secondary">{{ record.get_status_display }}</span></td>
+            {% elif module == 'accidentes' %}
+              <td class="record-title"><strong>{{ record.event_date|date:"d/m/Y" }} · {{ record.event_type }}</strong><div>{{ record.person.first_name }} {{ record.person.last_name }}</div><div class="small text-muted">{{ record.person.id_number }} · {{ record.event_place }}</div></td><td>{{ record.leave_start_date|date:"d/m/Y" }} - {{ record.leave_end_date|date:"d/m/Y" }}<div class="small text-muted">{{ record.total_leave_days }} días</div></td><td><span class="text-primary">Empresa {{ record.company_days }}</span><br><span class="text-success">IESS {{ record.iess_days }}</span></td><td>{{ record.return_date|date:"d/m/Y"|default:"Pendiente" }}<div class="small text-muted">{{ record.return_restrictions|default:"Sin restricciones"|truncatechars:70 }}</div></td><td><span class="badge bg-secondary">{{ record.get_procedure_status_display }}</span></td>
+            {% elif module == 'inspecciones' %}
+              <td class="record-title"><strong>{{ record.inspection_date|date:"d/m/Y" }} · {{ record.inspection_type }}</strong><div class="small text-muted">{{ record.camp|default:"Sin campamento" }} · {{ record.location }}</div></td><td>{{ record.finding|truncatechars:110 }}<div><span class="badge {% if record.priority == 'high' %}bg-danger{% elif record.priority == 'medium' %}bg-warning text-dark{% else %}bg-info{% endif %}">{{ record.get_priority_display }}</span></div></td><td>{{ record.corrective_action|truncatechars:90 }}<div class="small text-muted">{{ record.responsible }}</div></td><td>{{ record.due_date|date:"d/m/Y" }}</td><td><span class="badge bg-secondary">{{ record.get_status_display }}</span></td>
+            {% endif %}
+            <td class="text-end record-actions">{% if record.evidence %}<a href="{% url 'hr_evidence' module record.pk %}" target="_blank" class="btn btn-sm btn-outline-secondary" title="Ver evidencia"><i class="fas fa-paperclip"></i></a>{% endif %}<a href="{% url 'hr_module' module %}?edit={{ record.pk }}" class="btn btn-sm btn-outline-primary" title="Editar"><i class="fas fa-pen"></i></a><form method="post" action="{% url 'hr_module_delete' module record.pk %}" class="d-inline" onsubmit="return confirm('¿Eliminar este registro? La acción quedará en la bitácora.');">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" title="Eliminar"><i class="fas fa-trash"></i></button></form></td>
+          </tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-5"><i class="fas {{ config.icon }} fa-2x mb-2 d-block"></i>No hay registros con los filtros seleccionados.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="recordModal" tabindex="-1" aria-labelledby="recordModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-xl modal-dialog-scrollable"><div class="modal-content"><div class="modal-header"><div><div class="small text-muted">{{ config.title }}</div><h2 class="h5 modal-title" id="recordModalLabel">{% if editing %}Modificar {{ config.singular }}{% else %}Nuevo {{ config.singular }}{% endif %}</h2></div><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><form method="post" enctype="multipart/form-data"><div class="modal-body">{% csrf_token %}{% if editing %}<input type="hidden" name="edit_id" value="{{ editing.pk }}">{% endif %}{{ form|crispy }}<div class="alert alert-light border small mb-0"><i class="fas fa-shield-halved me-1"></i>Los cambios, el usuario y la fecha quedarán registrados en la bitácora.</div></div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary"><i class="fas fa-floppy-disk me-1"></i>Guardar</button></div></form></div></div>
+</div>
+{% if editing or form.errors %}<script>document.addEventListener('DOMContentLoaded',()=>bootstrap.Modal.getOrCreateInstance(document.getElementById('recordModal')).show());</script>{% endif %}
+{% endblock %}

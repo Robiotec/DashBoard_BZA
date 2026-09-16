@@ -4,7 +4,10 @@ from django.contrib.auth.models import AbstractUser
 from django.utils import timezone
 from django.db.models.fields.files import ImageField
 from django.core.mail import send_mail
+from django.core.exceptions import ValidationError
 from django.conf import settings
+from django.db.models.signals import post_save
+from django.dispatch import receiver
 import requests
 
 #Nuevos
@@ -74,6 +77,7 @@ class Person(models.Model):
     phone_number = models.CharField(max_length=20, verbose_name="Número de Teléfono", blank=True, null=True)
     email = models.EmailField(verbose_name="Correo Electrónico", blank=True, null=True)
     organization = models.ForeignKey(Organization, on_delete=models.PROTECT, blank=True, null=True, related_name='people', verbose_name="Organización")
+    dining_hall = models.ForeignKey('DiningHall', on_delete=models.SET_NULL, blank=True, null=True, related_name='diners', verbose_name="Comedor asignado")
     
     # Campos para información laboral
     cargo = models.CharField(max_length=100, verbose_name="Cargo", blank=True, null=True)
@@ -115,6 +119,179 @@ class Person(models.Model):
         constraints = [
             models.UniqueConstraint(fields=['organization', 'id_number'], name='unique_person_id_per_organization')
         ]
+
+
+class DiningHall(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='dining_halls', verbose_name="Organización")
+    name = models.CharField(max_length=120, verbose_name="Nombre del comedor")
+    location = models.CharField(max_length=180, blank=True, verbose_name="Ubicación")
+    is_active = models.BooleanField(default=True, verbose_name="Activo")
+
+    def __str__(self):
+        return self.name
+
+    class Meta:
+        verbose_name = "Comedor"
+        verbose_name_plural = "Comedores"
+        ordering = ['name']
+        constraints = [
+            models.UniqueConstraint(fields=['organization', 'name'], name='unique_dining_hall_per_org')
+        ]
+
+
+@receiver(post_save, sender=Organization)
+def create_initial_dining_halls(sender, instance, created, **kwargs):
+    if created:
+        for name in ('Comedor El Minero', 'Comedor Arichabala', 'Comedor Jorge Mina'):
+            DiningHall.objects.get_or_create(organization=instance, name=name)
+
+
+class Room(models.Model):
+    SERVICE_STATUS_CHOICES = (
+        ('available', 'Disponible'),
+        ('out_of_service', 'Fuera de servicio'),
+    )
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='rooms', verbose_name="Organización")
+    camp = models.CharField(max_length=100, blank=True, verbose_name="Campamento")
+    block = models.CharField(max_length=80, verbose_name="Bloque")
+    house = models.CharField(max_length=80, blank=True, verbose_name="Casa")
+    number = models.CharField(max_length=30, verbose_name="Número de habitación")
+    capacity = models.PositiveSmallIntegerField(verbose_name="Capacidad total")
+    service_status = models.CharField(max_length=20, choices=SERVICE_STATUS_CHOICES, default='available', verbose_name="Estado operativo")
+    notes = models.TextField(blank=True, verbose_name="Observaciones")
+
+    def __str__(self):
+        location = f"{self.block} / {self.house}" if self.house else self.block
+        return f"{location} / Hab. {self.number}"
+
+    @property
+    def occupied_beds(self):
+        return self.assignments.filter(status='occupied').count()
+
+    @property
+    def available_beds(self):
+        return max(self.capacity - self.occupied_beds, 0)
+
+    class Meta:
+        verbose_name = "Habitación"
+        verbose_name_plural = "Habitaciones"
+        ordering = ['block', 'house', 'number']
+        constraints = [
+            models.UniqueConstraint(fields=['organization', 'block', 'house', 'number'], name='unique_room_per_org')
+        ]
+
+
+class RoomAssignment(models.Model):
+    STATUS_CHOICES = (
+        ('reserved', 'Reservada'),
+        ('occupied', 'Ocupada'),
+    )
+
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='assignments', verbose_name="Habitación")
+    person = models.OneToOneField(Person, on_delete=models.CASCADE, related_name='room_assignment', verbose_name="Colaborador")
+    dining_hall = models.ForeignKey(DiningHall, on_delete=models.SET_NULL, blank=True, null=True, related_name='assignments', verbose_name="Comedor asignado")
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='occupied', verbose_name="Estado")
+    check_in_date = models.DateField(default=timezone.localdate, verbose_name="Fecha de ingreso")
+    bed_label = models.CharField(max_length=30, blank=True, verbose_name="Cama o litera")
+    notes = models.TextField(blank=True, verbose_name="Novedades")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        errors = {}
+        if self.person_id and self.room_id and self.person.organization_id != self.room.organization_id:
+            errors['person'] = "El colaborador y la habitación deben pertenecer a la misma organización."
+        if self.dining_hall_id and self.room_id and self.dining_hall.organization_id != self.room.organization_id:
+            errors['dining_hall'] = "El comedor debe pertenecer a la misma organización."
+        if self.room_id and self.room.service_status == 'out_of_service':
+            errors['room'] = "No se puede asignar una habitación fuera de servicio."
+        if self.room_id:
+            used = RoomAssignment.objects.filter(room=self.room).exclude(pk=self.pk).count()
+            if used >= self.room.capacity:
+                errors['room'] = "La habitación ya alcanzó su capacidad total."
+        if errors:
+            raise ValidationError(errors)
+
+    def __str__(self):
+        return f"{self.person} - {self.room}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        if self.person.dining_hall_id != self.dining_hall_id:
+            Person.objects.filter(pk=self.person_id).update(dining_hall_id=self.dining_hall_id)
+            self.person.dining_hall_id = self.dining_hall_id
+
+    class Meta:
+        verbose_name = "Asignación de habitación"
+        verbose_name_plural = "Asignaciones de habitaciones"
+        ordering = ['room', 'person__last_name']
+
+
+class RoomMaintenanceIssue(models.Model):
+    STATUS_CHOICES = (
+        ('pending', 'Pendiente'),
+        ('in_progress', 'En proceso'),
+        ('resolved', 'Resuelta'),
+    )
+
+    room = models.ForeignKey(Room, on_delete=models.CASCADE, related_name='maintenance_issues', verbose_name="Habitación")
+    description = models.TextField(verbose_name="Novedad o requerimiento")
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='pending', verbose_name="Estado")
+    reported_at = models.DateTimeField(auto_now_add=True, verbose_name="Reportada")
+    resolved_at = models.DateTimeField(blank=True, null=True, verbose_name="Resuelta")
+
+    def __str__(self):
+        return f"{self.room}: {self.description[:60]}"
+
+    class Meta:
+        verbose_name = "Novedad de mantenimiento"
+        verbose_name_plural = "Novedades de mantenimiento"
+        ordering = ['status', '-reported_at']
+
+
+class RoomOccupancyMovement(models.Model):
+    MOVEMENT_CHOICES = (
+        ('assigned', 'Asignación'),
+        ('updated', 'Cambio'),
+        ('released', 'Liberación'),
+    )
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='room_movements')
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='room_movements')
+    room = models.ForeignKey(Room, on_delete=models.SET_NULL, null=True, blank=True, related_name='occupancy_movements')
+    room_label = models.CharField(max_length=240, blank=True, default='')
+    movement_type = models.CharField(max_length=12, choices=MOVEMENT_CHOICES)
+    status = models.CharField(max_length=12, choices=RoomAssignment.STATUS_CHOICES)
+    bed_label = models.CharField(max_length=30, blank=True)
+    movement_date = models.DateField(default=timezone.localdate)
+    notes = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='room_movements_recorded')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+
+class DiningAssignmentHistory(models.Model):
+    STATUS_CHOICES = (
+        ('active', 'Activo'),
+        ('pending_change', 'Cambio pendiente'),
+        ('temporary', 'Temporal'),
+        ('finished', 'Finalizado'),
+    )
+
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='dining_assignment_history')
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='dining_assignment_history')
+    dining_hall = models.ForeignKey(DiningHall, on_delete=models.SET_NULL, null=True, blank=True, related_name='assignment_history')
+    start_date = models.DateField(default=timezone.localdate)
+    end_date = models.DateField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    notes = models.TextField(blank=True)
+    recorded_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='dining_assignments_recorded')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-start_date', '-created_at']
 
 class AttendanceReason(models.Model):
     name = models.CharField(max_length=100, verbose_name="Nombre")
@@ -650,3 +827,214 @@ class VisitaProgramada(models.Model):
         verbose_name = "Visita Programada"
         verbose_name_plural = "Visitas Programadas"
         ordering = ['fecha_programada', 'hora_programada']
+
+
+def hr_evidence_upload_to(instance, filename):
+    module = instance.__class__.__name__.lower()
+    return f"rrhh/{instance.organization_id}/{module}/{timezone.now():%Y/%m}/{filename}"
+
+
+class HRTrackedRecord(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE)
+    created_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    updated_by = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name='+')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        abstract = True
+
+
+class UpcomingEntry(HRTrackedRecord):
+    PROCESS_STATUS_CHOICES = (
+        ('draft', 'Por iniciar'), ('pending', 'Pendiente'), ('ready', 'Listo'),
+        ('entered', 'Ingresó'), ('cancelled', 'Cancelado'),
+    )
+    first_name = models.CharField(max_length=120, verbose_name='Nombres')
+    last_name = models.CharField(max_length=120, verbose_name='Apellidos')
+    id_number = models.CharField(max_length=20, verbose_name='Cédula')
+    company = models.CharField(max_length=150, blank=True, verbose_name='Empresa')
+    position = models.CharField(max_length=120, blank=True, verbose_name='Cargo')
+    department = models.CharField(max_length=120, blank=True, verbose_name='Departamento')
+    shift_group = models.CharField(max_length=80, blank=True, verbose_name='Turno o grupo')
+    destination_camp = models.CharField(max_length=120, verbose_name='Campamento de destino')
+    expected_entry_date = models.DateField(verbose_name='Fecha prevista de ingreso')
+    expected_exit_date = models.DateField(blank=True, null=True, verbose_name='Fecha prevista de salida')
+    documentation_complete = models.BooleanField(default=False, verbose_name='Documentación completa')
+    medical_exam_complete = models.BooleanField(default=False, verbose_name='Examen médico completo')
+    induction_complete = models.BooleanField(default=False, verbose_name='Inducción completa')
+    accreditation_complete = models.BooleanField(default=False, verbose_name='Acreditación completa')
+    final_approval = models.BooleanField(default=False, verbose_name='Aprobación final')
+    room = models.ForeignKey(Room, on_delete=models.SET_NULL, blank=True, null=True, related_name='upcoming_entries', verbose_name='Habitación reservada')
+    dining_hall = models.ForeignKey(DiningHall, on_delete=models.SET_NULL, blank=True, null=True, related_name='upcoming_entries', verbose_name='Comedor previsto')
+    status = models.CharField(max_length=12, choices=PROCESS_STATUS_CHOICES, default='draft', verbose_name='Estado')
+    notes = models.TextField(blank=True, verbose_name='Observaciones')
+    evidence = models.FileField(upload_to=hr_evidence_upload_to, blank=True, null=True, verbose_name='Documento de respaldo')
+
+    @property
+    def requirements_complete(self):
+        return all((self.documentation_complete, self.medical_exam_complete, self.induction_complete, self.accreditation_complete, self.final_approval))
+
+    def __str__(self):
+        return f'{self.first_name} {self.last_name} - {self.id_number}'
+
+    class Meta:
+        ordering = ['expected_entry_date', 'last_name']
+        indexes = [models.Index(fields=['organization', 'expected_entry_date', 'status'], name='upcoming_org_date_idx')]
+
+
+class AnnualActivity(HRTrackedRecord):
+    STATUS_CHOICES = (
+        ('planned', 'Planificada'), ('in_progress', 'En ejecución'), ('completed', 'Cumplida'),
+        ('rescheduled', 'Reprogramada'), ('cancelled', 'Cancelada'),
+    )
+    action_line = models.CharField(max_length=160, verbose_name='Línea de acción')
+    activity = models.TextField(verbose_name='Actividad')
+    target_population = models.CharField(max_length=180, blank=True, verbose_name='Población objetivo')
+    responsible = models.CharField(max_length=160, verbose_name='Responsable')
+    execution_months = models.JSONField(default=list, verbose_name='Meses de ejecución')
+    planned_date = models.DateField(blank=True, null=True, verbose_name='Fecha planificada')
+    due_date = models.DateField(blank=True, null=True, verbose_name='Fecha límite')
+    status = models.CharField(max_length=15, choices=STATUS_CHOICES, default='planned', verbose_name='Estado')
+    progress = models.PositiveSmallIntegerField(default=0, verbose_name='Avance (%)')
+    evidence = models.FileField(upload_to=hr_evidence_upload_to, blank=True, null=True, verbose_name='Evidencia')
+    evidence_link = models.URLField(blank=True, verbose_name='Enlace de evidencia')
+    notes = models.TextField(blank=True, verbose_name='Observaciones')
+
+    def __str__(self):
+        return self.action_line
+
+    class Meta:
+        ordering = ['planned_date', 'action_line']
+
+
+class SocialBenefitCase(HRTrackedRecord):
+    STATUS_CHOICES = (
+        ('not_started', 'Por iniciar'), ('processing', 'En trámite'), ('observed', 'Observado'),
+        ('approved', 'Aprobado'), ('paid', 'Pagado'), ('closed', 'Cerrado'), ('not_applicable', 'No aplica'),
+    )
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='social_benefit_cases', verbose_name='Colaborador')
+    case_date = models.DateField(default=timezone.localdate, verbose_name='Fecha del caso')
+    management_type = models.CharField(max_length=140, verbose_name='Tipo de subsidio o prestación')
+    required_document = models.CharField(max_length=180, blank=True, verbose_name='Documento requerido')
+    received_date = models.DateField(blank=True, null=True, verbose_name='Fecha de recepción')
+    pending_documents = models.TextField(blank=True, verbose_name='Documentos pendientes')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='not_started', verbose_name='Estado')
+    pending_action = models.TextField(blank=True, verbose_name='Acción pendiente')
+    responsible = models.CharField(max_length=160, verbose_name='Responsable')
+    close_date = models.DateField(blank=True, null=True, verbose_name='Fecha de cierre')
+    result = models.TextField(blank=True, verbose_name='Resultado')
+    notes = models.TextField(blank=True, verbose_name='Observaciones')
+    evidence = models.FileField(upload_to=hr_evidence_upload_to, blank=True, null=True, verbose_name='Documento de respaldo')
+
+    def __str__(self):
+        return f'{self.person} - {self.management_type}'
+
+    class Meta:
+        ordering = ['-case_date', 'person__last_name']
+
+
+class MedicalLeaveCase(HRTrackedRecord):
+    REASON_CHOICES = (
+        ('general_illness', 'Enfermedad general'), ('work_accident', 'Accidente laboral'),
+        ('non_work_accident', 'Accidente no laboral'), ('occupational_disease', 'Enfermedad profesional'),
+        ('other', 'Otra novedad'),
+    )
+    STATUS_CHOICES = (
+        ('active', 'Activo'), ('pending', 'Pendiente'), ('returned', 'Reincorporado'),
+        ('relocated', 'Reubicado'), ('closed', 'Cerrado'),
+    )
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='medical_leave_cases', verbose_name='Colaborador')
+    start_date = models.DateField(default=timezone.localdate, verbose_name='Fecha de inicio')
+    end_date = models.DateField(verbose_name='Fecha de finalización')
+    expected_return_date = models.DateField(verbose_name='Fecha prevista de reintegro')
+    reason = models.CharField(max_length=24, choices=REASON_CHOICES, verbose_name='Motivo general')
+    days = models.PositiveSmallIntegerField(default=1, verbose_name='Número de días')
+    medical_clearance_date = models.DateField(blank=True, null=True, verbose_name='Fecha de alta médica')
+    clearance_validated = models.BooleanField(default=False, verbose_name='Alta médica validada')
+    administrative_restriction = models.TextField(blank=True, verbose_name='Restricción o reubicación administrativa')
+    follow_up_action = models.TextField(blank=True, verbose_name='Acción de seguimiento')
+    responsible = models.CharField(max_length=160, verbose_name='Responsable')
+    next_review_date = models.DateField(blank=True, null=True, verbose_name='Próxima revisión')
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='active', verbose_name='Estado')
+    evidence = models.FileField(upload_to=hr_evidence_upload_to, blank=True, null=True, verbose_name='Certificado o respaldo')
+
+    def __str__(self):
+        return f'{self.person} - {self.start_date:%d/%m/%Y}'
+
+    class Meta:
+        ordering = ['-start_date', 'person__last_name']
+        indexes = [models.Index(fields=['organization', 'start_date', 'status'], name='medleave_org_date_idx')]
+
+
+class AccidentCase(HRTrackedRecord):
+    STATUS_CHOICES = (
+        ('notice_pending', 'Aviso pendiente'), ('qualification', 'En calificación'),
+        ('documents_pending', 'Documentación pendiente'), ('subsidy_processing', 'Subsidio en trámite'),
+        ('returned', 'Reincorporado'), ('closed', 'Cerrado'),
+    )
+    person = models.ForeignKey(Person, on_delete=models.CASCADE, related_name='accident_cases', verbose_name='Colaborador')
+    medical_leave = models.ForeignKey(MedicalLeaveCase, on_delete=models.SET_NULL, blank=True, null=True, related_name='accidents', verbose_name='Descanso médico relacionado')
+    benefit_case = models.ForeignKey(SocialBenefitCase, on_delete=models.SET_NULL, blank=True, null=True, related_name='accidents', verbose_name='Subsidio relacionado')
+    event_type = models.CharField(max_length=140, verbose_name='Tipo de accidente o contingencia')
+    event_date = models.DateField(default=timezone.localdate, verbose_name='Fecha del evento')
+    event_place = models.CharField(max_length=180, verbose_name='Lugar del evento')
+    leave_start_date = models.DateField(verbose_name='Inicio del descanso')
+    leave_end_date = models.DateField(verbose_name='Fin del descanso')
+    total_leave_days = models.PositiveSmallIntegerField(default=1, verbose_name='Total de días')
+    company_days = models.PositiveSmallIntegerField(default=0, verbose_name='Días cubiertos por empresa')
+    company_period = models.CharField(max_length=100, blank=True, verbose_name='Periodo empresa')
+    iess_days = models.PositiveSmallIntegerField(default=0, verbose_name='Días cubiertos por IESS')
+    iess_period = models.CharField(max_length=100, blank=True, verbose_name='Periodo IESS')
+    procedure_status = models.CharField(max_length=24, choices=STATUS_CHOICES, default='notice_pending', verbose_name='Estado del trámite')
+    return_date = models.DateField(blank=True, null=True, verbose_name='Fecha de retorno')
+    return_restrictions = models.TextField(blank=True, verbose_name='Restricciones de retorno')
+    follow_up = models.TextField(blank=True, verbose_name='Seguimiento y cierre')
+    evidence = models.FileField(upload_to=hr_evidence_upload_to, blank=True, null=True, verbose_name='Documento de respaldo')
+
+    def __str__(self):
+        return f'{self.person} - {self.event_date:%d/%m/%Y}'
+
+    class Meta:
+        ordering = ['-event_date', 'person__last_name']
+
+
+class HRInspection(HRTrackedRecord):
+    PRIORITY_CHOICES = (('high', 'Alta'), ('medium', 'Media'), ('low', 'Baja'))
+    STATUS_CHOICES = (
+        ('pending', 'Pendiente'), ('in_progress', 'En proceso'), ('completed', 'Cumplido'),
+        ('verified', 'Verificado'), ('closed', 'Cerrado'),
+    )
+    inspection_date = models.DateField(default=timezone.localdate, verbose_name='Fecha de inspección')
+    inspection_type = models.CharField(max_length=140, verbose_name='Tipo de inspección')
+    camp = models.CharField(max_length=120, blank=True, verbose_name='Campamento')
+    location = models.CharField(max_length=180, verbose_name='Bloque, área o lugar')
+    finding = models.TextField(verbose_name='Hallazgo')
+    priority = models.CharField(max_length=10, choices=PRIORITY_CHOICES, default='medium', verbose_name='Prioridad')
+    corrective_action = models.TextField(verbose_name='Acción correctiva')
+    responsible = models.CharField(max_length=160, verbose_name='Responsable')
+    due_date = models.DateField(verbose_name='Fecha prevista de cumplimiento')
+    status = models.CharField(max_length=12, choices=STATUS_CHOICES, default='pending', verbose_name='Estado')
+    evidence = models.FileField(upload_to=hr_evidence_upload_to, blank=True, null=True, verbose_name='Evidencia')
+    verification_notes = models.TextField(blank=True, verbose_name='Notas de verificación')
+
+    def __str__(self):
+        return f'{self.inspection_type} - {self.location}'
+
+    class Meta:
+        ordering = ['-inspection_date', 'priority']
+
+
+class HRAuditLog(models.Model):
+    organization = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='hr_audit_logs')
+    module = models.CharField(max_length=40)
+    object_id = models.PositiveIntegerField()
+    object_label = models.CharField(max_length=240)
+    action = models.CharField(max_length=20, choices=(('created', 'Creado'), ('updated', 'Actualizado'), ('deleted', 'Eliminado'), ('viewed', 'Consultado'), ('exported', 'Exportado')))
+    detail = models.TextField(blank=True)
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, related_name='hr_audit_logs')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [models.Index(fields=['organization', 'module', 'created_at'], name='hraudit_org_module_idx')]

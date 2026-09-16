@@ -6,6 +6,7 @@ from datetime import timedelta
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
+from django.db.models import Q
 from django.utils import timezone
 
 from gestion_personal.models import PlateLookupRecord
@@ -15,7 +16,7 @@ class Command(BaseCommand):
     help = "Procesa consultas de placas pendientes con concurrencia controlada."
 
     def add_arguments(self, parser):
-        parser.add_argument("--limit", type=int, default=2)
+        parser.add_argument("--limit", type=int, default=0, help="Máximo a procesar; 0 vacía toda la cola.")
         parser.add_argument("--stale-minutes", type=int, default=10)
         parser.add_argument("--timeout-seconds", type=int, default=120)
         parser.add_argument("--sleep", type=float, default=2.0)
@@ -29,21 +30,31 @@ class Command(BaseCommand):
                 self.stdout.write("Otro drenaje de placas ya esta ejecutandose.")
                 return
 
-            cutoff = timezone.now() - timedelta(minutes=max(1, options["stale_minutes"]))
-            records = list(
-                PlateLookupRecord.objects.filter(
-                    lookup_status__in=["pending", "running"],
-                    updated_at__lt=cutoff,
-                )
-                .order_by("updated_at")
-                .values_list("placa", flat=True)[: max(1, options["limit"])]
-            )
-
             processed = 0
             timed_out = 0
             failed = 0
             manage_py = settings.BASE_DIR / "manage.py"
-            for placa in records:
+            requested_limit = max(0, int(options["limit"] or 0))
+            while requested_limit == 0 or processed + timed_out + failed < requested_limit:
+                cutoff = timezone.now() - timedelta(minutes=max(1, options["stale_minutes"]))
+                record = (
+                    PlateLookupRecord.objects.filter(
+                        Q(lookup_status="pending") |
+                        Q(lookup_status="running", updated_at__lt=cutoff)
+                    )
+                    .order_by("requested_at", "created_at")
+                    .values("placa", "lookup_status")
+                    .first()
+                )
+                if not record:
+                    break
+                placa = record["placa"]
+                if record["lookup_status"] == "running":
+                    PlateLookupRecord.objects.filter(placa=placa).update(
+                        lookup_status="pending",
+                        started_at=None,
+                        last_error="Consulta huérfana recuperada automáticamente.",
+                    )
                 timeout_seconds = max(30, min(int(options["timeout_seconds"] or 120), 120))
                 command = [
                     sys.executable,
@@ -82,5 +93,6 @@ class Command(BaseCommand):
                     time.sleep(options["sleep"])
 
             self.stdout.write(
-                f"pending={len(records)} processed={processed} timed_out={timed_out} failed={failed}"
+                f"processed={processed} timed_out={timed_out} failed={failed} "
+                f"remaining={PlateLookupRecord.objects.filter(lookup_status__in=['pending', 'running']).count()}"
             )

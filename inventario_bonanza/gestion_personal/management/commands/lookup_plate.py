@@ -29,15 +29,17 @@ class Command(BaseCommand):
         if options.get("user_id"):
             user = get_user_model().objects.filter(pk=options["user_id"]).first()
 
+        defaults = {
+            "placa_aliases": plate_variants(options["placa"]),
+            "lookup_status": "running",
+            "last_error": "",
+            "started_at": timezone.now(),
+        }
+        if user is not None:
+            defaults["consultado_por"] = user
         record, _ = PlateLookupRecord.objects.update_or_create(
             placa=placa,
-            defaults={
-                "placa_aliases": plate_variants(options["placa"]),
-                "lookup_status": "running",
-                "last_error": "",
-                "consultado_por": user,
-                "started_at": timezone.now(),
-            },
+            defaults=defaults,
         )
 
         previous_handler = signal.getsignal(signal.SIGALRM)

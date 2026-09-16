@@ -1,6 +1,12 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
-from .models import Organization, CustomUser, Person, AttendanceRecord, VacationRecord, MedicalHistory, PlateLookupRecord, PersonLookupRecord
+from .models import (
+    AccidentCase, AnnualActivity, AttendanceRecord, CustomUser, DiningAssignmentHistory,
+    DiningHall, HRAuditLog, HRInspection, MedicalHistory, MedicalLeaveCase, Organization,
+    Person, PersonLookupRecord, PlateLookupRecord, Room, RoomAssignment,
+    RoomMaintenanceIssue, RoomOccupancyMovement, SocialBenefitCase, UpcomingEntry,
+    VacationRecord,
+)
 from .forms import CustomUserCreationForm, CustomUserChangeForm
 
 class CustomUserAdmin(UserAdmin):
@@ -77,3 +83,16 @@ class PersonLookupRecordAdmin(admin.ModelAdmin):
 
 
 admin.site.register(PersonLookupRecord, PersonLookupRecordAdmin)
+admin.site.register(DiningHall)
+admin.site.register(Room)
+admin.site.register(RoomAssignment)
+admin.site.register(RoomMaintenanceIssue)
+admin.site.register(RoomOccupancyMovement)
+admin.site.register(DiningAssignmentHistory)
+admin.site.register(UpcomingEntry)
+admin.site.register(AnnualActivity)
+admin.site.register(SocialBenefitCase)
+admin.site.register(MedicalLeaveCase)
+admin.site.register(AccidentCase)
+admin.site.register(HRInspection)
+admin.site.register(HRAuditLog)

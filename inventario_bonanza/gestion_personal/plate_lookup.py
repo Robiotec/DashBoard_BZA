@@ -193,10 +193,16 @@ def save_plate_lookup_result(result, user=None):
     normalized = result.get('normalized') or {}
     sources = result.get('sources') or {}
     errors = result.get('errors') or {}
+    existing = PlateLookupRecord.objects.filter(placa=result.get('placa')).first()
     defaults = {
-        field: normalized.get(field)
+        field: (
+            normalized.get(field)
+            if normalized.get(field) not in (None, '', [], {})
+            else getattr(existing, field, None)
+        )
         for field in PLATE_LOOKUP_FIELDS
     }
+    defaults['tramites'] = normalized.get('tramites') or getattr(existing, 'tramites', None) or []
     defaults.update({
         'placa_aliases': result.get('placa_aliases') or [result.get('placa')],
         'lookup_status': 'completed_with_errors' if errors else 'completed',

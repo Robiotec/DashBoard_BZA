@@ -1,0 +1,99 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Gestión integral de Talento Humano{% endblock %}
+
+{% block extra_css %}
+<style>
+  .hr-kpi { min-height: 126px; }
+  .hr-kpi .metric { font-size: 1.85rem; font-weight: 750; color: var(--bonanza-navy); }
+  .hr-module-link { border-left: 4px solid var(--bonanza-blue); transition: transform .15s ease, box-shadow .15s ease; }
+  .hr-module-link:hover { transform: translateY(-2px); box-shadow: var(--bonanza-shadow); }
+  .icon-tile { width: 42px; height: 42px; display: grid; place-items: center; background: #e8f1ff; color: var(--bonanza-blue); border-radius: 7px; flex: 0 0 42px; }
+  .comparison-chart { height: 190px; display: flex; align-items: end; gap: 1rem; padding-top: 1rem; }
+  .comparison-month { flex: 1; min-width: 54px; text-align: center; }
+  .comparison-bars { height: 145px; display: flex; align-items: end; justify-content: center; gap: 4px; border-bottom: 1px solid var(--bonanza-line); }
+  .comparison-bar { width: 10px; min-height: 0; border-radius: 2px 2px 0 0; }
+  .bar-medical { background: var(--bonanza-blue); } .bar-accident { background: var(--bonanza-red); } .bar-inspection { background: var(--bonanza-green); }
+  .alert-feed { max-height: 330px; overflow-y: auto; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid px-lg-4 py-3">
+  <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+      <div class="text-uppercase text-muted small fw-semibold">Talento Humano</div>
+      <h1 class="h3 mb-1"><i class="fas fa-people-roof me-2 text-primary"></i>Gestión integral</h1>
+      <p class="text-muted mb-0">Planificación, bienestar, alojamiento y seguimiento operativo.</p>
+    </div>
+    <form method="get" class="d-flex align-items-end gap-2">
+      <div><label class="form-label small mb-1">Periodo de indicadores</label><input type="month" name="month" value="{{ month_value }}" class="form-control"></div>
+      <button class="btn btn-primary" title="Aplicar periodo"><i class="fas fa-filter"></i></button>
+    </form>
+  </div>
+
+  <div class="row g-3 mb-4">
+    {% for key, item in modules.items %}
+    <div class="col-sm-6 col-xl-4">
+      <a href="{% url 'hr_module' key %}" class="card hr-module-link h-100 text-decoration-none text-dark">
+        <div class="card-body d-flex align-items-center gap-3">
+          <div class="icon-tile"><i class="fas {{ item.icon }}"></i></div>
+          <div class="flex-grow-1"><strong>{{ item.title }}</strong><div class="small text-muted">Registrar, consultar y exportar</div></div>
+          <i class="fas fa-chevron-right text-muted"></i>
+        </div>
+      </a>
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3"><div class="card hr-kpi h-100"><div class="card-body"><div class="small text-muted">Ocupación de alojamiento</div><div class="metric">{{ occupation_pct }}%</div><div class="small">{{ occupied }} ocupadas · {{ available }} disponibles · {{ reserved }} reservas</div></div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="card hr-kpi h-100"><div class="card-body"><div class="small text-muted">Ingresos programados</div><div class="metric">{{ upcoming_count }}</div><div class="small text-danger">{{ upcoming_without_room }} sin habitación prevista</div></div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="card hr-kpi h-100"><div class="card-body"><div class="small text-muted">Cumplimiento del cronograma</div><div class="metric">{{ activity_compliance }}%</div><div class="small">{{ completed_activities }} de {{ activity_total }} actividades cumplidas</div></div></div></div>
+    <div class="col-sm-6 col-xl-3"><div class="card hr-kpi h-100"><div class="card-body"><div class="small text-muted">Casos médicos del periodo</div><div class="metric">{{ medical_cases }}</div><div class="small">{{ medical_days }} días · {{ returns }} reincorporaciones</div><div class="small text-danger">Ausentismo estimado: {{ medical_absenteeism }}%</div></div></div></div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-lg-7">
+      <div class="card h-100">
+        <div class="card-header d-flex justify-content-between"><strong>Comparativo de los últimos 6 meses</strong><div class="small"><span class="text-primary">■ Descansos</span> <span class="text-danger ms-2">■ Accidentes</span> <span class="text-success ms-2">■ Inspecciones</span></div></div>
+        <div class="card-body">
+          <div class="comparison-chart">
+            {% for item in comparison %}
+            <div class="comparison-month" title="{{ item.medical }} descansos, {{ item.accidents }} accidentes, {{ item.inspections }} inspecciones">
+              <div class="comparison-bars"><div class="comparison-bar bar-medical" style="height:{{ item.medical_pct }}%"></div><div class="comparison-bar bar-accident" style="height:{{ item.accidents_pct }}%"></div><div class="comparison-bar bar-inspection" style="height:{{ item.inspections_pct }}%"></div></div>
+              <small>{{ item.label }}</small>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-lg-5">
+      <div class="card h-100">
+        <div class="card-header"><strong><i class="fas fa-bell me-2"></i>Alertas operativas</strong></div>
+        <div class="list-group list-group-flush alert-feed">
+          {% for alert in alerts %}<a href="{% url 'hr_module' alert.module %}" class="list-group-item list-group-item-action"><span class="badge bg-{{ alert.level }} me-2">Atención</span>{{ alert.text }}</a>{% empty %}<div class="list-group-item text-muted py-4 text-center">No hay alertas pendientes para este periodo.</div>{% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="card h-100"><div class="card-header"><strong>Control del cronograma</strong></div><div class="card-body"><div class="d-flex justify-content-between mb-2"><span>Reprogramadas</span><strong>{{ rescheduled_activities }}</strong></div><div class="d-flex justify-content-between"><span>Cumplidas sin evidencia</span><strong class="text-danger">{{ activity_evidence_pending }}</strong></div></div></div></div>
+    <div class="col-md-4"><div class="card h-100"><div class="card-header"><strong>Incidencia médica por área</strong></div><div class="card-body">{% for item in incidence_areas %}<div class="d-flex justify-content-between border-bottom py-1"><span>{{ item.person__departamento|default:'Sin departamento' }}</span><strong>{{ item.cases }} caso{{ item.cases|pluralize }} · {{ item.days }} días</strong></div>{% empty %}<div class="text-muted">Sin casos en el periodo.</div>{% endfor %}</div></div></div>
+    <div class="col-md-4"><div class="card h-100"><div class="card-header"><strong>Subsidios por estado</strong></div><div class="card-body">{% for item in benefit_statuses %}<div class="d-flex justify-content-between border-bottom py-1"><span>{{ item.label }}</span><strong>{{ item.count }}</strong></div>{% endfor %}</div></div></div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-md-4"><div class="card h-100"><div class="card-header"><strong>Alojamiento y alimentación</strong></div><div class="card-body"><div class="d-flex justify-content-between mb-2"><span>Capacidad habilitada</span><strong>{{ capacity }}</strong></div><div class="d-flex justify-content-between mb-2"><span>Sin comedor</span><strong class="text-danger">{{ without_dining }}</strong></div>{% for hall in dining_counts %}<div class="d-flex justify-content-between border-top py-2"><span>{{ hall.name }}</span><strong>{{ hall.assigned }}</strong></div>{% endfor %}</div></div></div>
+    <div class="col-md-4"><div class="card h-100"><div class="card-header"><strong>Inspecciones</strong></div><div class="card-body"><div class="metric h3">{{ inspections_count }}</div><div class="text-muted mb-3">realizadas en el periodo</div><div class="d-flex justify-content-between"><span>Hallazgos abiertos</span><strong class="text-danger">{{ open_findings }}</strong></div><div class="d-flex justify-content-between mt-2"><span>Acciones verificadas</span><strong class="text-success">{{ closed_actions }}</strong></div></div></div></div>
+    <div class="col-md-4"><div class="card h-100"><div class="card-header"><strong>Cobertura y prestaciones</strong></div><div class="card-body"><div class="d-flex justify-content-between mb-2"><span>Días cubiertos empresa</span><strong>{{ company_days }}</strong></div><div class="d-flex justify-content-between mb-2"><span>Días cubiertos IESS</span><strong>{{ iess_days }}</strong></div><div class="d-flex justify-content-between mb-2"><span>Trámites pendientes</span><strong>{{ benefits_pending }}</strong></div><div class="d-flex justify-content-between"><span>Documentación pendiente</span><strong class="text-danger">{{ documents_pending }}</strong></div></div></div></div>
+  </div>
+
+  <div class="card mb-4">
+    <div class="card-header"><strong><i class="fas fa-clock-rotate-left me-2"></i>Actividad reciente</strong></div>
+    <div class="table-responsive"><table class="table table-hover mb-0"><thead><tr><th>Fecha y hora</th><th>Módulo</th><th>Registro</th><th>Acción</th><th>Usuario</th></tr></thead><tbody>{% for log in audit_logs %}<tr><td>{{ log.created_at|date:"d/m/Y H:i" }}</td><td>{{ log.module|title }}</td><td>{{ log.object_label }}</td><td><span class="badge bg-secondary">{{ log.get_action_display }}</span></td><td>{{ log.user.username|default:"Sistema" }}</td></tr>{% empty %}<tr><td colspan="5" class="text-center text-muted py-4">Aún no hay movimientos registrados.</td></tr>{% endfor %}</tbody></table></div>
+  </div>
+</div>
+{% endblock %}

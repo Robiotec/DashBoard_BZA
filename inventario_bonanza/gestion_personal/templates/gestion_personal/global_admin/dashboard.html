@@ -5,7 +5,7 @@
 {% block content %}
 <div class="container-fluid">
   <div class="d-flex justify-content-between align-items-center mb-4">
-    <h1><i class="fas fa-globe me-2"></i>Administrador Global</h1>
+    <h1><i class="fas fa-globe me-2"></i>{% if user.organization %}Administración {{ user.organization.name }}{% else %}Administrador Global{% endif %}</h1>
     <div class="d-flex gap-2">
       <a href="{% url 'global_person_create' %}" class="btn btn-info text-white">
         <i class="fas fa-user-plus me-1"></i>Nueva Persona
@@ -13,12 +13,16 @@
       <a href="{% url 'global_records' %}" class="btn btn-warning">
         <i class="fas fa-clipboard-list me-1"></i>Registros
       </a>
-      <a href="{% url 'organization_create' %}" class="btn btn-primary">
+      <a href="{% url 'visitas_programadas' %}" class="btn btn-dark">
+        <i class="fas fa-calendar-check me-1"></i>Gestionar visitas
+      </a>
+      {% if not user.organization_id %}<a href="{% url 'organization_create' %}" class="btn btn-primary">
         <i class="fas fa-building me-1"></i>Nueva Organización
       </a>
       <a href="{% url 'global_user_create' %}" class="btn btn-success">
         <i class="fas fa-user-plus me-1"></i>Nuevo Usuario
       </a>
+      {% endif %}
     </div>
   </div>
 

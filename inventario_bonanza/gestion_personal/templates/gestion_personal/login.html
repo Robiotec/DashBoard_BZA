@@ -5,18 +5,19 @@
 {% block title %}Iniciar Sesión - Inventario Bonanza{% endblock %}
 
 {% block content_not_authenticated %}
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="card shadow mt-5">
+<div class="row justify-content-center align-items-center" style="min-height: calc(100vh - 130px);">
+    <div class="col-md-6 col-lg-4">
+        <div class="card shadow login-card">
             <div class="card-header bg-dark text-white d-flex align-items-center gap-3">
                 <img src="{% static 'img/logo.png' %}" alt="Grupo Minero Bonanza" style="height: 42px; width: 42px; object-fit: contain;">
                 <div>
                     <div class="fw-semibold">Grupo Minero Bonanza</div>
-                    <small class="text-white-50">Acceso al dashboard</small>
+                    <small class="text-white-50">Plataforma de gestión operativa</small>
                 </div>
             </div>
             <div class="card-body">
-                <h4 class="mb-4 text-center">Iniciar Sesión</h4>
+                <h4 class="mb-1 text-center">Iniciar sesión</h4>
+                <p class="text-muted text-center mb-4">Ingrese con su usuario corporativo.</p>
                 <form method="post">
                     {% csrf_token %}
                     {% if redirect_field_value or request.GET.next %}

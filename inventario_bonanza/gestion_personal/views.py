@@ -49,7 +49,9 @@ def is_operador(user):
     return user.is_authenticated and user.user_type == 'operador'
 
 def is_rh(user):
-    return user.is_authenticated and user.user_type == 'rh'
+    return user.is_authenticated and (
+        user.user_type == 'rh' or (user.user_type == 'global_admin' and user.organization_id)
+    )
 
 def is_rh_or_global(user):
     return user.is_authenticated and user.user_type in ['rh', 'global_admin']
@@ -74,6 +76,9 @@ def is_any_admin(user):
 
 def is_global_admin(user):
     return user.is_authenticated and user.user_type == 'global_admin'
+
+def is_system_global_admin(user):
+    return is_global_admin(user) and user.organization_id is None
 
 
 def _bytes_to_human(value):
@@ -254,7 +259,7 @@ def get_server_status_payload():
     }
 
 def organization_filter_for(user):
-    if getattr(user, 'user_type', None) == 'global_admin':
+    if getattr(user, 'user_type', None) == 'global_admin' and not getattr(user, 'organization_id', None):
         return Q()
     if getattr(user, 'organization_id', None):
         return Q(organization=user.organization)
@@ -514,7 +519,10 @@ def role_based_redirect(request):
 @login_required
 @user_passes_test(is_global_admin)
 def dashboard_global_admin(request):
-    organizaciones = Organization.objects.annotate(
+    organization_qs = Organization.objects.all()
+    if request.user.organization_id:
+        organization_qs = organization_qs.filter(pk=request.user.organization_id)
+    organizaciones = organization_qs.annotate(
         user_count=Count('users', distinct=True),
         people_count=Count('people', distinct=True),
         people_photo_count=Count(
@@ -525,29 +533,33 @@ def dashboard_global_admin(request):
     ).order_by('name')
     for organization in organizaciones:
         organization.people_without_photo_count = organization.people_count - organization.people_photo_count
-    total_personas = Person.objects.count()
-    total_personas_con_foto = Person.objects.exclude(foto='').exclude(foto__isnull=True).count()
+    people_qs = person_queryset_for(request.user)
+    total_personas = people_qs.count()
+    total_personas_con_foto = people_qs.exclude(foto='').exclude(foto__isnull=True).count()
+    users_qs = CustomUser.objects.all()
+    if request.user.organization_id:
+        users_qs = users_qs.filter(organization=request.user.organization)
     context = {
-        'total_organizaciones': Organization.objects.count(),
-        'organizaciones_activas': Organization.objects.filter(is_active=True).count(),
-        'total_usuarios': CustomUser.objects.count(),
+        'total_organizaciones': organization_qs.count(),
+        'organizaciones_activas': organization_qs.filter(is_active=True).count(),
+        'total_usuarios': users_qs.count(),
         'total_personas': total_personas,
         'total_personas_con_foto': total_personas_con_foto,
         'total_personas_sin_foto': total_personas - total_personas_con_foto,
         'organizaciones': organizaciones,
-        'usuarios_recientes': CustomUser.objects.select_related('organization').order_by('-date_joined')[:10],
+        'usuarios_recientes': users_qs.select_related('organization').order_by('-date_joined')[:10],
     }
     return render(request, 'gestion_personal/global_admin/dashboard.html', context)
 
 
 @login_required
-@user_passes_test(is_global_admin)
+@user_passes_test(is_system_global_admin)
 def server_status_api(request):
     return JsonResponse(get_server_status_payload())
 
 
 @login_required
-@user_passes_test(is_global_admin)
+@user_passes_test(is_system_global_admin)
 def server_status_page(request):
     return render(
         request,
@@ -563,7 +575,10 @@ class OrganizationListView(ListView):
     context_object_name = 'organizaciones'
 
     def get_queryset(self):
-        return Organization.objects.annotate(
+        queryset = Organization.objects.all()
+        if self.request.user.organization_id:
+            queryset = queryset.filter(pk=self.request.user.organization_id)
+        return queryset.annotate(
             user_count=Count('users', distinct=True),
             people_count=Count('people', distinct=True),
         ).order_by('name')
@@ -576,7 +591,10 @@ class OrganizationDetailView(DetailView):
     context_object_name = 'organizacion'
 
     def get_queryset(self):
-        return Organization.objects.all()
+        queryset = Organization.objects.all()
+        if self.request.user.organization_id:
+            queryset = queryset.filter(pk=self.request.user.organization_id)
+        return queryset
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -594,7 +612,7 @@ class OrganizationDetailView(DetailView):
         return context
 
 
-@method_decorator(user_passes_test(is_global_admin), name='dispatch')
+@method_decorator(user_passes_test(is_system_global_admin), name='dispatch')
 class OrganizationCreateView(CreateView):
     model = Organization
     form_class = OrganizationForm
@@ -613,12 +631,18 @@ class OrganizationUpdateView(UpdateView):
     template_name = 'gestion_personal/global_admin/organization_form.html'
     success_url = reverse_lazy('organization_list')
 
+    def get_queryset(self):
+        queryset = Organization.objects.all()
+        if self.request.user.organization_id:
+            queryset = queryset.filter(pk=self.request.user.organization_id)
+        return queryset
+
     def form_valid(self, form):
         messages.success(self.request, 'Organización actualizada correctamente.')
         return super().form_valid(form)
 
 
-@method_decorator(user_passes_test(is_global_admin), name='dispatch')
+@method_decorator(user_passes_test(is_system_global_admin), name='dispatch')
 class GlobalUserListView(ListView):
     model = CustomUser
     template_name = 'gestion_personal/global_admin/user_list.html'
@@ -628,7 +652,7 @@ class GlobalUserListView(ListView):
         return CustomUser.objects.select_related('organization').order_by('organization__name', 'username')
 
 
-@method_decorator(user_passes_test(is_global_admin), name='dispatch')
+@method_decorator(user_passes_test(is_system_global_admin), name='dispatch')
 class GlobalUserCreateView(CreateView):
     model = CustomUser
     form_class = CustomUserCreationForm
@@ -640,7 +664,7 @@ class GlobalUserCreateView(CreateView):
         return super().form_valid(form)
 
 
-@method_decorator(user_passes_test(is_global_admin), name='dispatch')
+@method_decorator(user_passes_test(is_system_global_admin), name='dispatch')
 class GlobalUserUpdateView(UpdateView):
     model = CustomUser
     form_class = CustomUserChangeForm
@@ -665,7 +689,7 @@ def global_records(request):
         fecha_obj = timezone.localdate()
 
     organization_id = request.GET.get('organization', '')
-    cedula = request.GET.get('cedula', '').strip()
+    person_search = (request.GET.get('q') or request.GET.get('cedula') or '').strip()
 
     registros_personal = AttendanceRecord.objects.select_related(
         'person', 'person__organization', 'recorded_by'
@@ -676,16 +700,26 @@ def global_records(request):
         Q(fecha_ingreso__date=fecha_obj) |
         Q(fecha_salida__date=fecha_obj)
     )
+    if request.user.organization_id:
+        registros_personal = registros_personal.filter(person__organization=request.user.organization)
+        registros_vehiculos = registros_vehiculos.filter(organization=request.user.organization)
 
     if organization_id.isdigit():
         registros_personal = registros_personal.filter(person__organization_id=organization_id)
         registros_vehiculos = registros_vehiculos.filter(organization_id=organization_id)
 
-    if cedula:
-        registros_personal = registros_personal.filter(person__id_number__icontains=cedula)
+    if person_search:
+        registros_personal = registros_personal.filter(
+            Q(person__id_number__icontains=person_search) |
+            Q(person__first_name__icontains=person_search) |
+            Q(person__last_name__icontains=person_search)
+        )
         registros_vehiculos = registros_vehiculos.filter(
-            Q(chofer_cedula__icontains=cedula) |
-            Q(chofer__id_number__icontains=cedula)
+            Q(chofer_cedula__icontains=person_search) |
+            Q(chofer__id_number__icontains=person_search) |
+            Q(chofer_nombre__icontains=person_search) |
+            Q(chofer__first_name__icontains=person_search) |
+            Q(chofer__last_name__icontains=person_search)
         )
 
     total_personal = registros_personal.count()
@@ -699,9 +733,11 @@ def global_records(request):
 
     context = {
         'fecha': fecha_obj.strftime('%Y-%m-%d'),
-        'organizaciones': Organization.objects.order_by('name'),
+        'organizaciones': Organization.objects.filter(
+            Q(pk=request.user.organization_id) if request.user.organization_id else Q()
+        ).order_by('name'),
         'selected_organization': organization_id,
-        'cedula': cedula,
+        'person_search': person_search,
         'registros_personal': registros_personal,
         'registros_vehiculos': registros_vehiculos,
         'registros_limit': RECORD_LIST_LIMIT,
@@ -723,7 +759,7 @@ def global_people_csv(request):
     search = request.GET.get('q', '')
     estado = request.GET.get('estado', '')
     foto = request.GET.get('foto', '')
-    personas = Person.objects.select_related('organization').order_by(
+    personas = person_queryset_for(request.user).select_related('organization').order_by(
         'organization__name', 'last_name', 'first_name'
     )
     organization = None
@@ -807,7 +843,7 @@ def global_people_photos_zip(request):
     organization_id = request.GET.get('organization', '')
     search = request.GET.get('q', '')
     estado = request.GET.get('estado', '')
-    personas = Person.objects.select_related('organization').exclude(foto='').order_by(
+    personas = person_queryset_for(request.user).select_related('organization').exclude(foto='').order_by(
         'organization__name', 'last_name', 'first_name'
     )
     organization = None
@@ -867,7 +903,10 @@ def start_plate_lookup_process(placa, user):
             active_count = sum(
                 1
                 for line in (active.stdout or '').splitlines()
-                if 'manage.py lookup_plate' in line and 'ps -eo args=' not in line
+                if (
+                    ('manage.py lookup_plate' in line or 'manage.py drain_plate_lookups' in line)
+                    and 'ps -eo args=' not in line
+                )
             )
             if active_count >= max_processes:
                 return False
@@ -876,13 +915,14 @@ def start_plate_lookup_process(placa, user):
             command = [
                 sys.executable,
                 str(manage_py),
-                'lookup_plate',
-                placa,
+                'drain_plate_lookups',
+                '--limit',
+                '0',
                 '--timeout-seconds',
                 '120',
+                '--sleep',
+                '5',
             ]
-            if user is not None:
-                command.extend(['--user-id', str(user.id)])
             subprocess.Popen(
                 command,
                 cwd=str(settings.BASE_DIR),
@@ -1073,7 +1113,7 @@ def api_person_lookup(request, cedula):
 
 
 @login_required
-@user_passes_test(is_global_admin)
+@user_passes_test(is_system_global_admin)
 def global_plate_lookup(request):
     form = PlateLookupForm(request.POST or None)
     record = None
@@ -1164,7 +1204,7 @@ def global_plate_lookup(request):
 
 
 @login_required
-@user_passes_test(is_global_admin)
+@user_passes_test(is_system_global_admin)
 def global_person_lookup(request):
     form = PersonLookupForm(request.POST or None)
     record = None
@@ -1747,10 +1787,21 @@ def dashboard_rrhh(request):
         total=Count('id'),
         activos=Count('id', filter=Q(estado='activo')),
         pasivos=Count('id', filter=Q(estado='pasivo')),
+        sin_foto=Count('id', filter=Q(estado='activo') & (Q(foto='') | Q(foto__isnull=True))),
     )
     total_personas = personal_counts['total']
     total_activos = personal_counts['activos']
     total_pasivos = personal_counts['pasivos']
+    total_sin_foto = personal_counts['sin_foto']
+    asistencias_hoy = AttendanceRecord.objects.filter(
+        person__in=personal_qs, timestamp__date=today, record_type='entrada'
+    ).values('person_id').distinct().count()
+    rooms_qs = Room.objects.filter(organization=request.user.organization)
+    habitaciones_total = rooms_qs.count()
+    habitaciones_fuera_servicio = rooms_qs.filter(service_status='out_of_service').count()
+    ocupacion = RoomAssignment.objects.filter(
+        room__organization=request.user.organization, status='occupied'
+    ).count()
 
     # Permisos y vacaciones activos
     personas_org = personal_qs
@@ -1773,21 +1824,35 @@ def dashboard_rrhh(request):
     form_sancion = SanctionForm(user=request.user)
     form_baja = BajaPersonaForm(initial={'fecha_egreso': today})
 
-    cedula = request.GET.get('cedula')
+    person_query = (request.GET.get('q') or request.GET.get('cedula') or '').strip()
+    search_results = Person.objects.none()
     fecha_str = request.GET.get('fecha')
-
-    if cedula:
+    fecha_filter = today
+    if fecha_str:
         try:
-            persona = person_queryset_for(request.user).get(id_number=cedula)
+            fecha_filter = datetime.strptime(fecha_str, "%Y-%m-%d").date()
+        except ValueError:
+            fecha_filter = today
+
+    if person_query:
+        try:
+            matches = person_queryset_for(request.user).filter(
+                Q(id_number__icontains=person_query) |
+                Q(first_name__icontains=person_query) |
+                Q(last_name__icontains=person_query) |
+                Q(first_name__icontains=person_query.split()[0])
+            ).order_by('last_name', 'first_name')
+            exact_match = matches.filter(id_number__iexact=person_query).first()
+            if exact_match:
+                persona = exact_match
+            elif matches.count() == 1:
+                persona = matches.first()
+            else:
+                search_results = matches[:15]
+                raise Person.MultipleObjectsReturned
 
             # Historial de asistencia
-            historial = AttendanceRecord.objects.filter(person=persona)
-            if fecha_str:
-                try:
-                    fecha = datetime.strptime(fecha_str, "%Y-%m-%d").date()
-                    historial = historial.filter(timestamp__date=fecha)
-                except ValueError:
-                    pass
+            historial = AttendanceRecord.objects.filter(person=persona, timestamp__date=fecha_filter)
             historial = historial.select_related('recorded_by').order_by('-timestamp')[:100]
 
             # Permiso activo
@@ -1826,6 +1891,8 @@ def dashboard_rrhh(request):
             form_sancion = SanctionForm(initial={'person': persona}, user=request.user)
             form_baja = BajaPersonaForm(instance=persona, initial={'fecha_egreso': today})
 
+        except Person.MultipleObjectsReturned:
+            persona = None
         except Person.DoesNotExist:
             persona = None
             messages.error(request, "No se encontró ninguna persona con esta cédula.")
@@ -1842,6 +1909,11 @@ def dashboard_rrhh(request):
         'total_personas': total_personas,
         'total_activos': total_activos,
         'total_pasivos': total_pasivos,
+        'total_sin_foto': total_sin_foto,
+        'asistencias_hoy': asistencias_hoy,
+        'habitaciones_total': habitaciones_total,
+        'habitaciones_fuera_servicio': habitaciones_fuera_servicio,
+        'ocupacion': ocupacion,
         'permisos_activos': permisos_activos,
         'permisos_activos_count': permisos_activos_count,
         'vacaciones_actuales_count': vacaciones_actuales_count,
@@ -1849,7 +1921,26 @@ def dashboard_rrhh(request):
         'historial_vacaciones': historial_vacaciones if 'historial_vacaciones' in locals() else None,
         'historial_sanciones': historial_sanciones if 'historial_sanciones' in locals() else None,
         'today': today,
+        'fecha_filter': fecha_filter,
         'now': now,
+        'person_query': person_query,
+        'search_results': search_results,
+        'sin_alojamiento': personal_qs.filter(estado='activo', room_assignment__isnull=True).count(),
+        'sin_comedor': personal_qs.filter(estado='activo', dining_hall__isnull=True).count(),
+        'pendientes_medicos': personal_qs.filter(estado='activo', medical_checkup=False).count(),
+        'proximos_ingresos': UpcomingEntry.objects.filter(
+            organization=request.user.organization,
+            expected_entry_date__range=(today, today + timedelta(days=7)),
+        ).exclude(status__in=('entered', 'cancelled')).count(),
+        'descansos_activos': MedicalLeaveCase.objects.filter(
+            organization=request.user.organization, status__in=('active', 'pending')
+        ).count(),
+        'hallazgos_abiertos': HRInspection.objects.filter(
+            organization=request.user.organization, status__in=('pending', 'in_progress')
+        ).count(),
+        'tramites_sociales_pendientes': SocialBenefitCase.objects.filter(
+            organization=request.user.organization, status__in=('not_started', 'processing', 'observed')
+        ).count(),
     }
     
     return render(request, 'gestion_personal/rh/dashboard_rrhh.html', context)
@@ -2185,21 +2276,40 @@ def rh_birthdays(request):
         .order_by('birth_date__day', 'last_name', 'first_name')
     )
     birthdays = []
+    birthdays_by_day = {}
     for person in people:
         area_label, area_class = _area_badge(person.area)
-        birthdays.append({
+        item = {
             'person': person,
             'name': _person_full_name(person),
             'day': person.birth_date.day,
             'area': area_label,
             'area_class': area_class,
-        })
+        }
+        birthdays.append(item)
+        birthdays_by_day.setdefault(person.birth_date.day, []).append(item)
+
+    calendar.setfirstweekday(calendar.MONDAY)
+    weekday_labels = ['Lun', 'Mar', 'Mie', 'Jue', 'Vie', 'Sab', 'Dom']
+    month_weeks = []
+    for week in calendar.monthcalendar(today.year, selected_month):
+        month_weeks.append([
+            {
+                'day': day,
+                'birthdays': birthdays_by_day.get(day, []) if day else [],
+                'is_today': day == today.day and selected_month == today.month,
+                'weekday': weekday_labels[index],
+            }
+            for index, day in enumerate(week)
+        ])
 
     context = {
         'month_choices': MONTH_CHOICES,
         'selected_month': selected_month,
         'selected_month_name': dict(MONTH_CHOICES)[selected_month],
         'birthdays': birthdays,
+        'month_weeks': month_weeks,
+        'weekday_labels': weekday_labels,
     }
     return render(request, 'gestion_personal/rh/birthdays.html', context)
 
@@ -2212,7 +2322,9 @@ class PersonListView(ListView):
     paginate_by = 50
     
     def get_queryset(self):
-        queryset = person_queryset_for(self.request.user).select_related('organization')
+        queryset = person_queryset_for(self.request.user).select_related(
+            'organization', 'dining_hall', 'room_assignment__room', 'room_assignment__dining_hall'
+        )
         search = self.request.GET.get('q', '')
         estado = self.request.GET.get('estado', '')
         organization_id = self.request.GET.get('organization', '')
@@ -2227,22 +2339,28 @@ class PersonListView(ListView):
             queryset = queryset.filter(estado=estado)
         if self.request.user.user_type == 'global_admin' and organization_id.isdigit():
             queryset = queryset.filter(organization_id=organization_id)
-        if self.request.user.user_type == 'global_admin':
-            if foto == 'con':
-                queryset = queryset.exclude(foto='').exclude(foto__isnull=True)
-            elif foto == 'sin':
-                queryset = queryset.filter(Q(foto='') | Q(foto__isnull=True))
+        if foto == 'con':
+            queryset = queryset.exclude(foto='').exclude(foto__isnull=True)
+        elif foto == 'sin':
+            queryset = queryset.filter(Q(foto='') | Q(foto__isnull=True))
         return queryset.order_by('last_name', 'first_name')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
+        base_photo_queryset = person_queryset_for(self.request.user)
+        photo_count = base_photo_queryset.exclude(foto='').exclude(foto__isnull=True).count()
+        context['selected_foto'] = self.request.GET.get('foto', '')
+        context['total_con_foto'] = photo_count
+        context['total_sin_foto'] = base_photo_queryset.count() - photo_count
         if self.request.user.user_type == 'global_admin':
             organization_id = self.request.GET.get('organization', '')
-            base_queryset = Person.objects.all()
+            base_queryset = person_queryset_for(self.request.user)
             if organization_id.isdigit():
                 base_queryset = base_queryset.filter(organization_id=organization_id)
             photo_count = base_queryset.exclude(foto='').exclude(foto__isnull=True).count()
-            context['organizaciones'] = Organization.objects.order_by('name')
+            context['organizaciones'] = Organization.objects.filter(
+                Q(pk=self.request.user.organization_id) if self.request.user.organization_id else Q()
+            ).order_by('name')
             context['selected_organization'] = organization_id
             context['selected_foto'] = self.request.GET.get('foto', '')
             context['total_con_foto'] = photo_count
@@ -2255,6 +2373,334 @@ class PersonListView(ListView):
         return context
 
 
+@login_required
+@user_passes_test(is_rh)
+def accommodation_rack(request):
+    organization = request.user.organization
+    rooms = list(Room.objects.filter(organization=organization).prefetch_related(
+        'assignments__person', 'assignments__dining_hall', 'maintenance_issues', 'upcoming_entries'
+    ))
+    status_filter = request.GET.get('status', '')
+    camp_filter = request.GET.get('camp', '')
+    block_filter = request.GET.get('block', '')
+    room_filter = (request.GET.get('room') or '').strip()
+    person_filter = (request.GET.get('q') or '').strip()
+    room_rows = []
+    counters = {'free': 0, 'occupied': 0, 'reserved': 0, 'out_of_service': 0}
+    for room in rooms:
+        assignments = list(room.assignments.all())
+        occupied_count = sum(item.status == 'occupied' for item in assignments)
+        upcoming_reservations = [
+            item for item in room.upcoming_entries.all()
+            if item.status not in ('entered', 'cancelled')
+        ]
+        reserved_count = sum(item.status == 'reserved' for item in assignments) + len(upcoming_reservations)
+        if room.service_status == 'out_of_service':
+            rack_status = 'out_of_service'
+        elif occupied_count:
+            rack_status = 'occupied'
+        elif reserved_count:
+            rack_status = 'reserved'
+        else:
+            rack_status = 'free'
+        counters[rack_status] += 1
+        pending_issues = [issue for issue in room.maintenance_issues.all() if issue.status != 'resolved']
+        room_rows.append({
+            'room': room,
+            'assignments': assignments,
+            'occupied_count': occupied_count,
+            'available_beds': max(room.capacity - len(assignments) - len(upcoming_reservations), 0),
+            'rack_status': rack_status,
+            'pending_issues': pending_issues,
+            'upcoming_reservations': upcoming_reservations,
+        })
+    blocks = sorted({room.block for room in rooms})
+    camps = sorted({room.camp for room in rooms if room.camp})
+    if status_filter in counters:
+        room_rows = [row for row in room_rows if row['rack_status'] == status_filter]
+    if block_filter:
+        room_rows = [row for row in room_rows if row['room'].block == block_filter]
+    if camp_filter:
+        room_rows = [row for row in room_rows if row['room'].camp == camp_filter]
+    if room_filter:
+        room_rows = [row for row in room_rows if room_filter.casefold() in row['room'].number.casefold()]
+    if person_filter:
+        needle = person_filter.casefold()
+        room_rows = [row for row in room_rows if any(
+            needle in f"{item.person.first_name} {item.person.last_name} {item.person.id_number}".casefold()
+            for item in row['assignments']
+        ) or any(
+            needle in f"{item.first_name} {item.last_name} {item.id_number}".casefold()
+            for item in row['upcoming_reservations']
+        )]
+    context = {
+        'room_rows': room_rows,
+        'counters': counters,
+        'blocks': blocks,
+        'camps': camps,
+        'status_filter': status_filter,
+        'camp_filter': camp_filter,
+        'block_filter': block_filter,
+        'room_filter': room_filter,
+        'person_filter': person_filter,
+        'room_form': RoomForm(organization=organization),
+        'dining_hall_form': DiningHallForm(organization=organization),
+        'dining_halls': DiningHall.objects.filter(organization=organization),
+        'unassigned_people': Person.objects.filter(
+            organization=organization, estado='activo', room_assignment__isnull=True
+        ).order_by('last_name', 'first_name'),
+        'recent_movements': RoomOccupancyMovement.objects.filter(
+            organization=organization
+        ).select_related('person', 'room', 'recorded_by')[:30],
+    }
+    return render(request, 'gestion_personal/rh/accommodation_rack.html', context)
+
+
+@login_required
+@user_passes_test(is_rh)
+def rh_person_search(request):
+    query = (request.GET.get('q') or '').strip()
+    purpose = request.GET.get('purpose', 'all')
+    people = Person.objects.filter(organization=request.user.organization, estado='activo')
+    if purpose == 'room':
+        people = people.filter(room_assignment__isnull=True)
+    if query:
+        terms = query.split()
+        search_q = Q(id_number__icontains=query)
+        for term in terms:
+            search_q |= Q(first_name__icontains=term) | Q(last_name__icontains=term)
+        people = people.filter(search_q)
+    else:
+        people = people.none()
+    results = [{
+        'id': person.id,
+        'name': f"{person.first_name} {person.last_name}",
+        'id_number': person.id_number,
+        'area': person.area or '',
+    } for person in people.order_by('last_name', 'first_name')[:20]]
+    return JsonResponse({'results': results})
+
+
+@login_required
+@user_passes_test(is_rh)
+def dining_hall_management(request):
+    organization = request.user.organization
+    query = (request.GET.get('q') or '').strip()
+    hall_id = request.GET.get('dining_hall', '')
+    people = Person.objects.filter(organization=organization, estado='activo').select_related(
+        'dining_hall', 'room_assignment__room'
+    )
+    if query:
+        terms = query.split()
+        search_q = Q(id_number__icontains=query)
+        for term in terms:
+            search_q |= Q(first_name__icontains=term) | Q(last_name__icontains=term)
+        people = people.filter(search_q)
+    if hall_id == 'none':
+        people = people.filter(dining_hall__isnull=True)
+    elif hall_id.isdigit():
+        people = people.filter(dining_hall_id=hall_id)
+    halls = DiningHall.objects.filter(organization=organization).annotate(
+        diner_count=Count('diners', filter=Q(diners__estado='activo'))
+    )
+    return render(request, 'gestion_personal/rh/dining_hall_management.html', {
+        'people': people.order_by('last_name', 'first_name')[:200],
+        'dining_halls': halls,
+        'query': query,
+        'hall_filter': hall_id,
+        'total_active': Person.objects.filter(organization=organization, estado='activo').count(),
+        'without_dining': Person.objects.filter(organization=organization, estado='activo', dining_hall__isnull=True).count(),
+        'dining_hall_form': DiningHallForm(organization=organization),
+    })
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def person_dining_hall_update(request, person_id):
+    person = get_object_or_404(Person, pk=person_id, organization=request.user.organization, estado='activo')
+    hall_id = request.POST.get('dining_hall')
+    hall = None
+    if hall_id:
+        hall = get_object_or_404(DiningHall, pk=hall_id, organization=request.user.organization, is_active=True)
+    try:
+        effective_date = datetime.strptime(request.POST.get('start_date', ''), '%Y-%m-%d').date()
+    except ValueError:
+        effective_date = timezone.localdate()
+    DiningAssignmentHistory.objects.filter(
+        person=person, status__in=('active', 'temporary'), end_date__isnull=True
+    ).update(status='finished', end_date=effective_date)
+    person.dining_hall = hall
+    person.save(update_fields=['dining_hall'])
+    if hasattr(person, 'room_assignment'):
+        person.room_assignment.dining_hall = hall
+        person.room_assignment.save(update_fields=['dining_hall'])
+    DiningAssignmentHistory.objects.create(
+        organization=request.user.organization, person=person, dining_hall=hall,
+        start_date=effective_date, status=request.POST.get('assignment_status', 'active'),
+        notes=request.POST.get('notes', ''), recorded_by=request.user,
+    )
+    messages.success(request, f"Comedor actualizado para {person.first_name} {person.last_name}.")
+    query_string = urlencode({'q': request.POST.get('q', ''), 'dining_hall': request.POST.get('filter', '')})
+    return redirect(f"{reverse('dining_hall_management')}?{query_string}")
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def accommodation_room_create(request):
+    form = RoomForm(request.POST, organization=request.user.organization)
+    if form.is_valid():
+        form.save()
+        messages.success(request, 'Habitación creada correctamente.')
+    else:
+        messages.error(request, 'No se pudo crear la habitación: ' + '; '.join(form.errors.get_json_data().keys()))
+    return redirect('accommodation_rack')
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def accommodation_room_update(request, room_id):
+    room = get_object_or_404(Room, pk=room_id, organization=request.user.organization)
+    form = RoomForm(request.POST, instance=room, organization=request.user.organization)
+    if form.is_valid():
+        if form.cleaned_data['capacity'] < room.assignments.count():
+            messages.error(request, 'La capacidad no puede ser menor al número de asignaciones actuales.')
+        elif form.cleaned_data['service_status'] == 'out_of_service' and room.assignments.exists():
+            messages.error(request, 'Libere las asignaciones antes de marcar la habitación fuera de servicio.')
+        else:
+            form.save()
+            messages.success(request, 'Habitación actualizada correctamente.')
+    else:
+        messages.error(request, 'Revise los datos de la habitación.')
+    return redirect('accommodation_rack')
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def accommodation_room_delete(request, room_id):
+    room = get_object_or_404(Room, pk=room_id, organization=request.user.organization)
+    if room.assignments.exists():
+        messages.error(request, 'No se puede eliminar una habitación con personas asignadas. Libere primero sus asignaciones.')
+    else:
+        room_label = str(room)
+        room.delete()
+        messages.success(request, f'Habitación eliminada: {room_label}.')
+    return redirect('accommodation_rack')
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def dining_hall_create(request):
+    form = DiningHallForm(request.POST, organization=request.user.organization)
+    if form.is_valid():
+        form.save()
+        messages.success(request, 'Comedor creado correctamente.')
+    else:
+        messages.error(request, 'Revise los datos del comedor.')
+    destination = request.POST.get('next')
+    return redirect('dining_hall_management' if destination == 'dining' else 'accommodation_rack')
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def dining_hall_update(request, dining_hall_id):
+    dining_hall = get_object_or_404(
+        DiningHall, pk=dining_hall_id, organization=request.user.organization
+    )
+    form = DiningHallForm(request.POST, instance=dining_hall, organization=request.user.organization)
+    if form.is_valid():
+        form.save()
+        messages.success(request, 'Comedor actualizado correctamente.')
+    else:
+        messages.error(request, 'Revise los datos del comedor.')
+    return redirect('dining_hall_management')
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def dining_hall_delete(request, dining_hall_id):
+    dining_hall = get_object_or_404(
+        DiningHall, pk=dining_hall_id, organization=request.user.organization
+    )
+    affected_people = dining_hall.diners.filter(estado='activo').count()
+    dining_name = dining_hall.name
+    dining_hall.delete()
+    message = f'Comedor eliminado: {dining_name}.'
+    if affected_people:
+        message += f' {affected_people} colaborador(es) quedaron sin comedor asignado.'
+    messages.success(request, message)
+    return redirect('dining_hall_management')
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def room_assignment_save(request, room_id):
+    room = get_object_or_404(Room, pk=room_id, organization=request.user.organization)
+    form = RoomAssignmentForm(request.POST, organization=request.user.organization, room=room)
+    if form.is_valid():
+        assignment = form.save()
+        RoomOccupancyMovement.objects.create(
+            organization=request.user.organization, person=assignment.person, room=room,
+            room_label=str(room), movement_type='assigned', status=assignment.status,
+            bed_label=assignment.bed_label, movement_date=assignment.check_in_date,
+            notes=assignment.notes, recorded_by=request.user,
+        )
+        DiningAssignmentHistory.objects.filter(
+            person=assignment.person, status__in=('active', 'temporary'), end_date__isnull=True
+        ).update(status='finished', end_date=assignment.check_in_date)
+        DiningAssignmentHistory.objects.create(
+            organization=request.user.organization, person=assignment.person,
+            dining_hall=assignment.dining_hall, start_date=assignment.check_in_date,
+            status='active', recorded_by=request.user,
+        )
+        messages.success(request, 'Alojamiento y comedor asignados correctamente.')
+    else:
+        error_text = ' '.join(message for errors in form.errors.values() for message in errors)
+        messages.error(request, error_text or 'No se pudo guardar la asignación.')
+    return redirect('accommodation_rack')
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def room_assignment_delete(request, assignment_id):
+    assignment = get_object_or_404(
+        RoomAssignment, pk=assignment_id, room__organization=request.user.organization
+    )
+    RoomOccupancyMovement.objects.create(
+        organization=request.user.organization, person=assignment.person, room=assignment.room,
+        room_label=str(assignment.room), movement_type='released', status=assignment.status,
+        bed_label=assignment.bed_label, movement_date=timezone.localdate(),
+        notes=request.POST.get('notes', ''), recorded_by=request.user,
+    )
+    assignment.delete()
+    messages.success(request, 'Asignación liberada correctamente.')
+    return redirect('accommodation_rack')
+
+
+@login_required
+@user_passes_test(is_rh)
+@require_POST
+def room_maintenance_create(request, room_id):
+    room = get_object_or_404(Room, pk=room_id, organization=request.user.organization)
+    form = RoomMaintenanceIssueForm(request.POST, organization=request.user.organization)
+    if form.is_valid():
+        issue = form.save(commit=False)
+        issue.room = room
+        issue.save()
+        messages.success(request, 'Novedad de mantenimiento registrada.')
+    else:
+        messages.error(request, 'Ingrese una descripción válida para la novedad.')
+    return redirect('accommodation_rack')
+
+
 @method_decorator(user_passes_test(is_rh_or_global), name='dispatch')
 class PersonCreateView(CreateView):
     """Crear nueva persona"""
@@ -2265,7 +2711,7 @@ class PersonCreateView(CreateView):
 
     def get_initial(self):
         initial = super().get_initial()
-        if self.request.user.user_type == 'global_admin':
+        if self.request.user.user_type == 'global_admin' and not self.request.user.organization_id:
             organization_id = self.request.GET.get('organization')
             if organization_id:
                 initial['organization'] = organization_id
@@ -2278,14 +2724,14 @@ class PersonCreateView(CreateView):
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
-        if self.request.user.user_type != 'global_admin':
+        if self.request.user.user_type != 'global_admin' or self.request.user.organization_id:
             form.fields['organization'].widget = django_forms.HiddenInput()
             form.fields['organization'].initial = self.request.user.organization
         return form
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        if self.request.user.user_type != 'global_admin':
+        if self.request.user.user_type != 'global_admin' or self.request.user.organization_id:
             kwargs['forced_organization'] = self.request.user.organization
         return kwargs
 
@@ -2294,12 +2740,12 @@ class PersonCreateView(CreateView):
         organization_id = self.request.GET.get('organization') or self.get_initial().get('organization')
         if organization_id:
             context['form_organization'] = Organization.objects.filter(id=organization_id).first()
-        elif self.request.user.user_type != 'global_admin':
+        elif self.request.user.user_type != 'global_admin' or self.request.user.organization_id:
             context['form_organization'] = self.request.user.organization
         return context
     
     def form_valid(self, form):
-        if self.request.user.user_type != 'global_admin' and not form.instance.organization_id:
+        if (self.request.user.user_type != 'global_admin' or self.request.user.organization_id) and not form.instance.organization_id:
             form.instance.organization = self.request.user.organization
         messages.success(self.request, 'Persona creada exitosamente')
         return super().form_valid(form)
@@ -2329,13 +2775,13 @@ class PersonUpdateView(UpdateView):
 
     def get_form(self, form_class=None):
         form = super().get_form(form_class)
-        if self.request.user.user_type != 'global_admin':
+        if self.request.user.user_type != 'global_admin' or self.request.user.organization_id:
             form.fields['organization'].widget = django_forms.HiddenInput()
         return form
 
     def get_form_kwargs(self):
         kwargs = super().get_form_kwargs()
-        if self.request.user.user_type != 'global_admin':
+        if self.request.user.user_type != 'global_admin' or self.request.user.organization_id:
             kwargs['forced_organization'] = self.request.user.organization
         return kwargs
 
@@ -4633,14 +5079,18 @@ def vehicle_delete(request, pk):
 # Modificar el decorador de visitas_programadas para permitir más roles
 def can_program_visits(user):
     """Verifica si un usuario puede programar visitas"""
-    return user.is_authenticated and user.user_type in ['admin_mina', 'admin_molino', 'rh', 'seguridad_fisica']
+    return user.is_authenticated and user.user_type in ['global_admin', 'admin_mina', 'admin_molino', 'rh', 'seguridad_fisica']
 
 @login_required
 @user_passes_test(can_program_visits)
 def visitas_programadas(request):
     """Vista para listar y crear visitas programadas"""
     # Obtener todas las visitas programadas por este usuario
-    visitas = VisitaProgramada.objects.filter(programado_por=request.user).order_by('fecha_programada', 'hora_programada')
+    visitas = VisitaProgramada.objects.select_related('programado_por').order_by('fecha_programada', 'hora_programada')
+    if request.user.user_type == 'global_admin' and request.user.organization_id:
+        visitas = visitas.filter(programado_por__organization=request.user.organization)
+    elif request.user.user_type != 'global_admin':
+        visitas = visitas.filter(programado_por=request.user)
     
     # Filtrar por fecha si se proporciona
     fecha_str = request.GET.get('fecha')
@@ -4682,7 +5132,12 @@ def visitas_programadas(request):
 @user_passes_test(can_program_visits)
 def editar_visita_programada(request, visita_id):
     """Vista para editar una visita programada"""
-    visita = get_object_or_404(VisitaProgramada, id=visita_id, programado_por=request.user)
+    visita_qs = VisitaProgramada.objects.all()
+    if request.user.user_type == 'global_admin' and request.user.organization_id:
+        visita_qs = visita_qs.filter(programado_por__organization=request.user.organization)
+    elif request.user.user_type != 'global_admin':
+        visita_qs = visita_qs.filter(programado_por=request.user)
+    visita = get_object_or_404(visita_qs, id=visita_id)
     
     if request.method == 'POST':
         form = VisitaProgramadaForm(request.POST, instance=visita, programado_por=request.user)
@@ -4705,7 +5160,12 @@ def editar_visita_programada(request, visita_id):
 @require_POST
 def cancelar_visita_programada(request, visita_id):
     """Vista para cancelar una visita programada"""
-    visita = get_object_or_404(VisitaProgramada, id=visita_id, programado_por=request.user)
+    visita_qs = VisitaProgramada.objects.all()
+    if request.user.user_type == 'global_admin' and request.user.organization_id:
+        visita_qs = visita_qs.filter(programado_por__organization=request.user.organization)
+    elif request.user.user_type != 'global_admin':
+        visita_qs = visita_qs.filter(programado_por=request.user)
+    visita = get_object_or_404(visita_qs, id=visita_id)
     visita.status = 'cancelada'
     visita.save()
     

@@ -1,0 +1,137 @@
+{% extends "gestion_personal/base.html" %}
+
+{% block title %}Mapa de ocupación - RRHH{% endblock %}
+
+{% block extra_css %}
+<style>
+  .rack-page { padding: 1.5rem 0 2rem; }
+  .rack-header { display:flex; justify-content:space-between; align-items:flex-start; gap:1rem; margin-bottom:1.25rem; }
+  .rack-header h1 { font-size:1.65rem; font-weight:700; margin:0; }
+  .rack-header p { color:#6c757d; margin:.3rem 0 0; }
+  .metric { border:1px solid #dee2e6; border-left:4px solid var(--accent); border-radius:6px; background:#fff; padding:1rem; height:100%; }
+  .metric strong { display:block; font-size:1.6rem; line-height:1; margin-top:.35rem; }
+  .room-card { border:1px solid #dee2e6; border-top:4px solid var(--status); border-radius:6px; background:#fff; height:100%; }
+  .room-card .room-title { font-size:1.05rem; font-weight:700; }
+  .status-free { --status:#198754; } .status-occupied { --status:#0d6efd; }
+  .status-reserved { --status:#f0ad4e; } .status-out_of_service { --status:#dc3545; }
+  .occupant { border-top:1px solid #edf0f2; padding:.65rem 0; }
+  .room-meta { color:#5c636a; font-size:.875rem; }
+  .toolbar { background:#f8f9fa; border:1px solid #dee2e6; border-radius:6px; padding:.85rem; }
+  .person-search-results { position:absolute; z-index:1060; left:0; right:0; max-height:240px; overflow:auto; background:#fff; border:1px solid #ced4da; border-radius:0 0 6px 6px; box-shadow:0 6px 16px rgba(0,0,0,.12); }
+  .person-search-result { display:block; width:100%; padding:.65rem .75rem; border:0; border-bottom:1px solid #edf0f2; background:#fff; text-align:left; }
+  .person-search-result:hover { background:#f0f6ff; }
+  @media (max-width:767px) { .rack-header { flex-direction:column; } .rack-header .btn-group { width:100%; } }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="rack-page">
+  <div class="rack-header">
+    <div>
+      <h1><i class="fas fa-bed me-2 text-primary"></i>Mapa de ocupación</h1>
+      <p>Control de habitaciones, ocupantes, comedores y mantenimiento.</p>
+    </div>
+    <div class="btn-group">
+      <button class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#diningModal"><i class="fas fa-utensils me-1"></i>Comedores</button>
+      <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#roomModal"><i class="fas fa-plus me-1"></i>Nueva habitación</button>
+    </div>
+  </div>
+
+  <div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3"><div class="metric" style="--accent:#198754"><span>Libres</span><strong>{{ counters.free }}</strong></div></div>
+    <div class="col-6 col-lg-3"><div class="metric" style="--accent:#0d6efd"><span>Ocupadas</span><strong>{{ counters.occupied }}</strong></div></div>
+    <div class="col-6 col-lg-3"><div class="metric" style="--accent:#f0ad4e"><span>Reservadas</span><strong>{{ counters.reserved }}</strong></div></div>
+    <div class="col-6 col-lg-3"><div class="metric" style="--accent:#dc3545"><span>Fuera de servicio</span><strong>{{ counters.out_of_service }}</strong></div></div>
+  </div>
+
+  <form method="get" class="toolbar row g-2 align-items-end mb-4">
+    <div class="col-lg-3"><label class="form-label small">Buscar ocupante</label><input name="q" value="{{ person_filter }}" class="form-control" placeholder="Nombre, apellido o cédula"></div>
+    <div class="col-sm-6 col-lg-2"><label class="form-label small">Campamento</label><select name="camp" class="form-select"><option value="">Todos</option>{% for camp in camps %}<option value="{{ camp }}" {% if camp_filter == camp %}selected{% endif %}>{{ camp }}</option>{% endfor %}</select></div>
+    <div class="col-sm-6 col-lg-2"><label class="form-label small">Bloque</label><select name="block" class="form-select"><option value="">Todos</option>{% for block in blocks %}<option value="{{ block }}" {% if block_filter == block %}selected{% endif %}>{{ block }}</option>{% endfor %}</select></div>
+    <div class="col-sm-6 col-lg-2"><label class="form-label small">Habitación</label><input name="room" value="{{ room_filter }}" class="form-control" placeholder="Número"></div>
+    <div class="col-sm-6 col-lg-2"><label class="form-label small">Estado</label><select name="status" class="form-select"><option value="">Todos</option><option value="free" {% if status_filter == 'free' %}selected{% endif %}>Libre</option><option value="occupied" {% if status_filter == 'occupied' %}selected{% endif %}>Ocupada</option><option value="reserved" {% if status_filter == 'reserved' %}selected{% endif %}>Reservada</option><option value="out_of_service" {% if status_filter == 'out_of_service' %}selected{% endif %}>Fuera de servicio</option></select></div>
+    <div class="col-lg-1 d-flex gap-2"><button class="btn btn-dark" title="Aplicar"><i class="fas fa-filter"></i></button><a href="{% url 'accommodation_rack' %}" class="btn btn-outline-secondary" title="Limpiar"><i class="fas fa-times"></i></a></div>
+  </form>
+
+  <div class="row g-3">
+    {% for row in room_rows %}
+    <div class="col-md-6 col-xl-4">
+      <article class="room-card status-{{ row.rack_status }}">
+        <div class="p-3">
+          <div class="d-flex justify-content-between align-items-start mb-2">
+            <div><div class="room-title">Habitación {{ row.room.number }}</div><div class="room-meta">{% if row.room.camp %}{{ row.room.camp }} · {% endif %}{{ row.room.block }}{% if row.room.house %} · {{ row.room.house }}{% endif %}</div></div>
+            {% if row.rack_status == 'free' %}<span class="badge bg-success">Libre</span>{% elif row.rack_status == 'occupied' %}<span class="badge bg-primary">Ocupada</span>{% elif row.rack_status == 'reserved' %}<span class="badge bg-warning text-dark">Reservada</span>{% else %}<span class="badge bg-danger">Fuera de servicio</span>{% endif %}
+          </div>
+          <div class="d-flex gap-3 room-meta mb-2"><span><i class="fas fa-bed me-1"></i>{{ row.room.capacity }} camas</span><span><i class="fas fa-check-circle me-1"></i>{{ row.available_beds }} disponibles</span></div>
+          {% for assignment in row.assignments %}
+          <div class="occupant d-flex justify-content-between gap-2">
+            <div><strong>{{ assignment.person.first_name }} {{ assignment.person.last_name }}</strong><div class="room-meta">{{ assignment.person.area|default:'Sin área' }} · Ingreso {{ assignment.check_in_date|date:'d/m/Y' }}{% if assignment.bed_label %} · Cama {{ assignment.bed_label }}{% endif %}</div><div class="room-meta"><i class="fas fa-utensils me-1"></i>{{ assignment.dining_hall.name|default:'Sin comedor' }}</div></div>
+            <form method="post" action="{% url 'room_assignment_delete' assignment.id %}" onsubmit="return confirm('¿Liberar esta asignación?')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" title="Liberar habitación"><i class="fas fa-right-from-bracket"></i></button></form>
+          </div>
+          {% empty %}<div class="text-muted small py-2">Sin ocupantes asignados.</div>{% endfor %}
+          {% for entry in row.upcoming_reservations %}<div class="occupant d-flex justify-content-between gap-2 border-warning"><div><strong>{{ entry.first_name }} {{ entry.last_name }}</strong><div class="room-meta">{{ entry.id_number }} · Ingreso previsto {{ entry.expected_entry_date|date:'d/m/Y' }}</div><div class="room-meta"><span class="badge bg-warning text-dark">Reserva por próximo ingreso</span></div></div><a href="{% url 'hr_module' 'ingresos' %}?edit={{ entry.pk }}" class="btn btn-sm btn-outline-primary align-self-start" title="Editar reserva"><i class="fas fa-pen"></i></a></div>{% endfor %}
+          {% if row.pending_issues %}<div class="alert alert-warning py-2 small mt-2 mb-0"><i class="fas fa-screwdriver-wrench me-1"></i>{{ row.pending_issues|length }} novedad{{ row.pending_issues|length|pluralize:"es" }} pendiente{{ row.pending_issues|length|pluralize }}</div>{% endif %}
+        </div>
+        <div class="border-top p-2 d-flex gap-2">
+          <button class="btn btn-sm btn-primary flex-fill" data-bs-toggle="modal" data-bs-target="#assign{{ row.room.id }}" {% if row.available_beds == 0 or row.rack_status == 'out_of_service' %}disabled{% endif %}><i class="fas fa-user-plus me-1"></i>Asignar</button>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#editRoom{{ row.room.id }}" title="Editar habitación"><i class="fas fa-pen"></i></button>
+          <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#maintenance{{ row.room.id }}" title="Registrar mantenimiento"><i class="fas fa-screwdriver-wrench"></i></button>
+          <form method="post" action="{% url 'accommodation_room_delete' row.room.id %}" onsubmit="return confirm('¿Eliminar definitivamente la habitación {{ row.room.number }}?')">{% csrf_token %}<button class="btn btn-sm btn-outline-danger" title="Eliminar habitación" {% if row.assignments %}disabled{% endif %}><i class="fas fa-trash"></i></button></form>
+        </div>
+      </article>
+    </div>
+
+    <div class="modal fade" id="assign{{ row.room.id }}" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'room_assignment_save' row.room.id %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Asignar habitación {{ row.room.number }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">
+      <div class="mb-3 position-relative" data-person-search><label class="form-label">Colaborador</label><div class="input-group"><span class="input-group-text"><i class="fas fa-search"></i></span><input type="search" class="form-control" data-person-query placeholder="Buscar por nombre o cédula" autocomplete="off" required></div><input type="hidden" name="person" data-person-id required><div class="person-search-results d-none" data-person-results></div><div class="form-text" data-person-selected>Escriba al menos 2 caracteres.</div></div>
+      <div class="mb-3"><label class="form-label">Comedor</label><select name="dining_hall" class="form-select"><option value="">Sin asignar</option>{% for dining in dining_halls %}{% if dining.is_active %}<option value="{{ dining.id }}">{{ dining.name }}</option>{% endif %}{% endfor %}</select></div>
+      <div class="row"><div class="col-6 mb-3"><label class="form-label">Estado</label><select name="status" class="form-select"><option value="occupied">Ocupada</option><option value="reserved">Reservada</option></select></div><div class="col-6 mb-3"><label class="form-label">Fecha de ingreso</label><input type="date" name="check_in_date" value="{% now 'Y-m-d' %}" class="form-control" required></div></div><div class="mb-3"><label class="form-label">Cama o litera</label><input name="bed_label" class="form-control" placeholder="Ej. Cama 2 / Litera superior"></div>
+      <div><label class="form-label">Novedades</label><textarea name="notes" class="form-control" rows="2"></textarea></div>
+    </div><div class="modal-footer"><button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-primary">Guardar asignación</button></div></form></div></div></div>
+
+    <div class="modal fade" id="maintenance{{ row.room.id }}" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'room_maintenance_create' row.room.id %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Mantenimiento · Hab. {{ row.room.number }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><label class="form-label">Novedad o requerimiento</label><textarea name="description" class="form-control mb-3" rows="3" required></textarea><label class="form-label">Estado</label><select name="status" class="form-select"><option value="pending">Pendiente</option><option value="in_progress">En proceso</option><option value="resolved">Resuelta</option></select></div><div class="modal-footer"><button class="btn btn-primary">Registrar</button></div></form></div></div></div>
+    <div class="modal fade" id="editRoom{{ row.room.id }}" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'accommodation_room_update' row.room.id %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Editar habitación {{ row.room.number }}</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body"><div class="mb-3"><label class="form-label">Campamento</label><input name="camp" value="{{ row.room.camp }}" class="form-control"></div><div class="mb-3"><label class="form-label">Bloque</label><input name="block" value="{{ row.room.block }}" class="form-control" required></div><div class="mb-3"><label class="form-label">Casa</label><input name="house" value="{{ row.room.house }}" class="form-control"></div><div class="row"><div class="col-6 mb-3"><label class="form-label">Número</label><input name="number" value="{{ row.room.number }}" class="form-control" required></div><div class="col-6 mb-3"><label class="form-label">Capacidad</label><input type="number" min="1" name="capacity" value="{{ row.room.capacity }}" class="form-control" required></div></div><div class="mb-3"><label class="form-label">Estado operativo</label><select name="service_status" class="form-select"><option value="available" {% if row.room.service_status == 'available' %}selected{% endif %}>Disponible</option><option value="out_of_service" {% if row.room.service_status == 'out_of_service' %}selected{% endif %}>Fuera de servicio</option></select></div><div><label class="form-label">Observaciones</label><textarea name="notes" class="form-control" rows="2">{{ row.room.notes }}</textarea></div></div><div class="modal-footer"><button class="btn btn-primary">Guardar cambios</button></div></form></div></div></div>
+    {% empty %}<div class="col-12"><div class="text-center border rounded p-5 text-muted"><i class="fas fa-bed fa-2x mb-3"></i><p class="mb-2">No hay habitaciones para mostrar.</p><button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#roomModal">Crear primera habitación</button></div></div>{% endfor %}
+  </div>
+
+  <div class="card mt-4"><div class="card-header"><strong><i class="fas fa-clock-rotate-left me-2"></i>Movimientos recientes de alojamiento</strong></div><div class="table-responsive" style="max-height:320px;overflow:auto"><table class="table table-sm table-hover mb-0"><thead class="sticky-top"><tr><th>Fecha</th><th>Colaborador</th><th>Habitación</th><th>Cama/litera</th><th>Movimiento</th><th>Registrado por</th></tr></thead><tbody>{% for movement in recent_movements %}<tr><td>{{ movement.movement_date|date:'d/m/Y' }}</td><td>{{ movement.person.first_name }} {{ movement.person.last_name }}<div class="small text-muted">{{ movement.person.id_number }}</div></td><td>{{ movement.room_label }}</td><td>{{ movement.bed_label|default:'---' }}</td><td>{{ movement.get_movement_type_display }}</td><td>{{ movement.recorded_by.username|default:'Sistema' }}</td></tr>{% empty %}<tr><td colspan="6" class="text-center text-muted py-3">Aún no hay movimientos registrados.</td></tr>{% endfor %}</tbody></table></div></div>
+</div>
+
+<div class="modal fade" id="roomModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'accommodation_room_create' %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Nueva habitación</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">{{ room_form.as_p }}</div><div class="modal-footer"><button class="btn btn-primary">Crear habitación</button></div></form></div></div></div>
+<div class="modal fade" id="diningModal" tabindex="-1"><div class="modal-dialog"><div class="modal-content"><form method="post" action="{% url 'dining_hall_create' %}">{% csrf_token %}<div class="modal-header"><h5 class="modal-title">Comedores</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div><div class="modal-body">{% if dining_halls %}<div class="mb-3">{% for dining in dining_halls %}<span class="badge {% if dining.is_active %}bg-success{% else %}bg-secondary{% endif %} me-1">{{ dining.name }}</span>{% endfor %}</div>{% endif %}<hr><h6>Registrar comedor</h6>{{ dining_hall_form.as_p }}</div><div class="modal-footer"><button class="btn btn-primary">Guardar comedor</button></div></form></div></div></div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.querySelectorAll('[data-person-search]').forEach((container) => {
+  const query = container.querySelector('[data-person-query]');
+  const personId = container.querySelector('[data-person-id]');
+  const results = container.querySelector('[data-person-results]');
+  const selected = container.querySelector('[data-person-selected]');
+  let timer;
+  query.addEventListener('input', () => {
+    personId.value = '';
+    selected.textContent = 'Seleccione un resultado de la búsqueda.';
+    clearTimeout(timer);
+    if (query.value.trim().length < 2) { results.classList.add('d-none'); return; }
+    timer = setTimeout(async () => {
+      const response = await fetch(`{% url 'rh_person_search' %}?purpose=room&q=${encodeURIComponent(query.value.trim())}`);
+      const data = await response.json();
+      results.innerHTML = data.results.length ? data.results.map(person => `<button type="button" class="person-search-result" data-id="${person.id}" data-name="${person.name}" data-id-number="${person.id_number}"><strong>${person.name}</strong><br><small>${person.id_number}${person.area ? ' · ' + person.area : ''}</small></button>`).join('') : '<div class="p-3 text-muted">No se encontraron colaboradores disponibles.</div>';
+      results.classList.remove('d-none');
+    }, 250);
+  });
+  results.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-id]');
+    if (!button) return;
+    personId.value = button.dataset.id;
+    query.value = `${button.dataset.name} · ${button.dataset.idNumber}`;
+    selected.textContent = 'Colaborador seleccionado.';
+    results.classList.add('d-none');
+  });
+  container.closest('form').addEventListener('submit', (event) => {
+    if (!personId.value) { event.preventDefault(); query.setCustomValidity('Seleccione un colaborador de los resultados.'); query.reportValidity(); }
+    else query.setCustomValidity('');
+  });
+});
+</script>
+{% endblock %}
