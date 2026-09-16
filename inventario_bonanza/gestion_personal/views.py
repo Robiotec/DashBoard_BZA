@@ -3854,25 +3854,23 @@ def asignar_epp(request):
     """Dashboard para administradores de mina o molino"""
     user = request.user
     area = 'mina' if user.user_type == 'admin_mina' else 'molino'
+    today = timezone.localdate()
     
     # Obtener personal del área correspondiente
-    personal = Person.objects.filter(area__icontains=area)
+    personal = person_queryset_for(user).filter(area__icontains=area)
     
     # Obtener personas en vacaciones
     vacaciones_activas = VacationRecord.objects.filter(
         person__in=personal,
-        start_date__lte=timezone.now().date(),
-        end_date__gte=timezone.now().date()
+        start_date__lte=today,
+        end_date__gte=today,
     )
     
     # Personas que han regresado de vacaciones pero no han pasado por el médico
-    sin_revision_medica = Person.objects.filter(
-        id__in=[v.person.id for v in VacationRecord.objects.filter(
-            person__in=personal,
-            end_date__lt=timezone.now().date(),
-            medical_checkup_done=False
-        )]
-    )
+    sin_revision_medica = personal.filter(
+        vacation_records__end_date__lt=today,
+        vacation_records__medical_checkup_done=False,
+    ).distinct()
     
     # Inicializar variables para búsqueda de persona
     persona = None
@@ -3905,15 +3903,15 @@ def asignar_epp(request):
             # Permiso activo
             permiso_activo = PermisoSalida.objects.filter(
                 person=persona,
-                fecha_inicio__lte=timezone.now().date(),
-                fecha_fin__gte=timezone.now().date()
+                fecha_inicio__lte=today,
+                fecha_fin__gte=today,
             ).first()
             
             # Vacaciones activas
             vacaciones_persona = VacationRecord.objects.filter(
                 person=persona,
-                start_date__lte=timezone.now().date(),
-                end_date__gte=timezone.now().date()
+                start_date__lte=today,
+                end_date__gte=today,
             ).first()
             
         except Person.DoesNotExist:
@@ -4065,27 +4063,19 @@ def vacation_list(request):
     vacaciones = vacaciones.order_by('-start_date')
     
     # Estadísticas
-    total_activas = vacaciones_base.filter(
-        start_date__lte=today,
-        end_date__gte=today
-    ).count()
-    
-    total_futuras = vacaciones_base.filter(
-        start_date__gt=today
-    ).count()
-    
-    total_pendientes_control = vacaciones_base.filter(
-        end_date__lt=today,
-        medical_checkup_done=False
-    ).count()
+    vacation_counts = vacaciones_base.aggregate(
+        active=Count('id', filter=Q(start_date__lte=today, end_date__gte=today)),
+        future=Count('id', filter=Q(start_date__gt=today)),
+        pending_medical=Count('id', filter=Q(end_date__lt=today, medical_checkup_done=False)),
+    )
     
     context = {
         'vacaciones': vacaciones,
         'estado': estado,
         'search': search,
-        'total_activas': total_activas,
-        'total_futuras': total_futuras,
-        'total_pendientes_control': total_pendientes_control,
+        'total_activas': vacation_counts['active'],
+        'total_futuras': vacation_counts['future'],
+        'total_pendientes_control': vacation_counts['pending_medical'],
         'today': today,
     }
     
