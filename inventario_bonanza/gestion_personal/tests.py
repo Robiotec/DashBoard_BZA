@@ -449,6 +449,38 @@ class DetailedPeopleSearchTests(TestCase):
         self.assertLessEqual(len(queries), 3)
 
 
+@override_settings(SECURE_SSL_REDIRECT=False)
+class MedicalOrganizationScopeTests(TestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Médica', slug='medica')
+        self.other_organization = Organization.objects.create(name='Ajena', slug='ajena')
+        self.doctor = CustomUser.objects.create_user(
+            username='doctora', password='test-password', user_type='medico', organization=self.organization,
+        )
+        self.visible_person = Person.objects.create(
+            first_name='Marta', last_name='Visible', id_number='0505050505',
+            birth_date=date(1990, 1, 1), gender='F', organization=self.organization,
+        )
+        self.outside_person = Person.objects.create(
+            first_name='Paula', last_name='Externa', id_number='0606060606',
+            birth_date=date(1990, 1, 1), gender='F', organization=self.other_organization,
+        )
+        self.client.force_login(self.doctor)
+
+    def test_medical_views_are_scoped_to_the_doctors_organization(self):
+        listing = self.client.get(reverse('person_list_medical'))
+        self.assertContains(listing, 'Marta Visible')
+        self.assertNotContains(listing, 'Paula Externa')
+        self.assertEqual(
+            self.client.get(reverse('person_detail_medical', args=[self.outside_person.id])).status_code,
+            404,
+        )
+        self.assertEqual(
+            self.client.get(reverse('medical_checkup', args=[self.outside_person.id])).status_code,
+            404,
+        )
+
+
 class MonthlyWorkdayPersistenceTests(TestCase):
     def test_monthly_grid_is_persisted_in_batches(self):
         organization = Organization.objects.create(name='Jornadas', slug='jornadas')

@@ -3206,7 +3206,9 @@ def export_person_profile(request, person_id):
 @require_POST
 def cancelar_permiso(request, permiso_id):
     """Cancelar un permiso activo"""
-    permiso = get_object_or_404(PermisoSalida, id=permiso_id)
+    permiso = get_object_or_404(
+        PermisoSalida.objects.filter(person__in=person_queryset_for(request.user)), id=permiso_id,
+    )
     person = permiso.person
     permiso.delete()
     
@@ -3243,16 +3245,19 @@ def dashboard_medico(request):
     historial_medico = None
     error = None
     
-    # Estadísticas
-    total_personas = Person.objects.count()
-    aprobados_count = Person.objects.filter(medical_checkup=True).count()
+    people = person_queryset_for(request.user)
+    today = timezone.localdate()
+    medical_counts = people.aggregate(
+        total=Count('id'), approved=Count('id', filter=Q(medical_checkup=True)),
+    )
     
     # Personas pendientes de revisión general
-    personas_pendientes = Person.objects.filter(medical_checkup=False)
+    personas_pendientes = people.filter(medical_checkup=False)
     
     # Personas que volvieron de vacaciones y necesitan revisión
     post_vacation = VacationRecord.objects.filter(
-        end_date__lte=timezone.now().date(),
+        person__in=people,
+        end_date__lte=today,
         medical_checkup_done=False,
         person__medical_checkup=False
     ).order_by('-end_date')
@@ -3266,8 +3271,8 @@ def dashboard_medico(request):
             # Obtener vacaciones activas si existen
             vacaciones_activas = VacationRecord.objects.filter(
                 person=persona,
-                start_date__lte=timezone.now().date(),
-                end_date__gte=timezone.now().date()
+                start_date__lte=today,
+                end_date__gte=today,
             ).first()
             
             # Historial médico
@@ -3291,8 +3296,8 @@ def dashboard_medico(request):
         'error': error,
         'personas_pendientes': personas_pendientes,
         'post_vacation': post_vacation,
-        'total_personas': total_personas,
-        'aprobados_count': aprobados_count,
+        'total_personas': medical_counts['total'],
+        'aprobados_count': medical_counts['approved'],
     }
     
     return render(request, 'gestion_personal/medico/dashboard_medico.html', context)
@@ -3305,7 +3310,7 @@ class PersonListMedical(ListView):
     context_object_name = 'personas'
     
     def get_queryset(self):
-        queryset = super().get_queryset()
+        queryset = person_queryset_for(self.request.user)
         search = self.request.GET.get('search', '')
         if search:
             queryset = queryset.filter(
@@ -3321,6 +3326,9 @@ class PersonDetailMedical(DetailView):
     model = Person
     template_name = 'gestion_personal/medico/person_detail.html'
     context_object_name = 'persona'
+
+    def get_queryset(self):
+        return person_queryset_for(self.request.user)
     
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
@@ -3349,7 +3357,7 @@ class PersonDetailMedical(DetailView):
 @user_passes_test(is_medico)
 def medical_checkup(request, pk):
     """Realizar revisión médica a una persona"""
-    persona = get_object_or_404(Person, pk=pk)
+    persona = get_object_or_404(person_queryset_for(request.user), pk=pk)
     
     if request.method == 'POST':
         form = MedicalCheckupForm(request.POST, instance=persona)
@@ -3379,7 +3387,9 @@ def medical_checkup(request, pk):
 @user_passes_test(is_medico)
 def medical_vacation_checkup(request, vacation_id):
     """Realizar revisión médica post-vacaciones"""
-    vacation = get_object_or_404(VacationRecord, pk=vacation_id)
+    vacation = get_object_or_404(
+        VacationRecord.objects.filter(person__in=person_queryset_for(request.user)), pk=vacation_id,
+    )
     person = vacation.person
     
     if request.method == 'POST':
@@ -3433,7 +3443,7 @@ def create_medical_consultation(request):
         initial = {}
         if person_id:
             try:
-                initial['person'] = Person.objects.get(id=person_id)
+                initial['person'] = person_queryset_for(request.user).get(id=person_id)
             except Person.DoesNotExist:
                 pass
         
@@ -3447,7 +3457,9 @@ def create_medical_consultation(request):
 @user_passes_test(is_medico)
 def medical_consultation_detail(request, pk):
     """Ver detalle de una consulta médica"""
-    consulta = get_object_or_404(MedicalConsultation, pk=pk)
+    consulta = get_object_or_404(
+        MedicalConsultation.objects.filter(person__in=person_queryset_for(request.user)), pk=pk,
+    )
     
     return render(request, 'gestion_personal/medico/medical_consultation_detail.html', {
         'consulta': consulta
@@ -3461,26 +3473,21 @@ def dashboard_admin(request):
     user = request.user
     area = 'mina' if user.user_type == 'admin_mina' else 'molino'
     today = timezone.localdate()
-    day_start, day_end = local_day_bounds(today)
-
     # Obtener personal del área correspondiente
-    personal = Person.objects.filter(area__icontains=area)
+    personal = person_queryset_for(user).filter(area__icontains=area)
     
     # Obtener personas en vacaciones
     vacaciones_activas = VacationRecord.objects.filter(
         person__in=personal,
-        start_date__lte=timezone.now().date(),
-        end_date__gte=timezone.now().date()
+        start_date__lte=today,
+        end_date__gte=today,
     )
     
     # Personas que han regresado de vacaciones pero no han pasado por el médico
-    sin_revision_medica = Person.objects.filter(
-        id__in=[v.person.id for v in VacationRecord.objects.filter(
-            person__in=personal,
-            end_date__lt=timezone.now().date(),
-            medical_checkup_done=False
-        )]
-    )
+    sin_revision_medica = personal.filter(
+        vacation_records__end_date__lt=today,
+        vacation_records__medical_checkup_done=False,
+    ).distinct()
     
     # Inicializar variables para búsqueda de persona
     persona = None
@@ -3513,15 +3520,15 @@ def dashboard_admin(request):
             # Permiso activo
             permiso_activo = PermisoSalida.objects.filter(
                 person=persona,
-                fecha_inicio__lte=timezone.now().date(),
-                fecha_fin__gte=timezone.now().date()
+                fecha_inicio__lte=today,
+                fecha_fin__gte=today,
             ).first()
             
             # Vacaciones activas
             vacaciones_persona = VacationRecord.objects.filter(
                 person=persona,
-                start_date__lte=timezone.now().date(),
-                end_date__gte=timezone.now().date()
+                start_date__lte=today,
+                end_date__gte=today,
             ).first()
             
         except Person.DoesNotExist:
@@ -3541,7 +3548,7 @@ def dashboard_admin(request):
         'form_vacaciones': form_vacaciones,
         'form_sancion': form_sancion,
         'form_visitante': form_visitante,
-        'today': today,  # Añadir esta línea
+        'today': today,
     }
     
     return render(request, 'gestion_personal/admin/dashboard_admin.html', context)
@@ -3554,7 +3561,7 @@ def personal_area(request):
     area = 'mina' if user.user_type == 'admin_mina' else 'molino'
     
     # Buscar personas del área
-    personal = Person.objects.filter(area__icontains=area)
+    personal = person_queryset_for(user).filter(area__icontains=area)
     
     # Filtros
     search = request.GET.get('search', '')
@@ -4283,7 +4290,7 @@ def registrar_sancion(request):
         person_id = request.GET.get('person_id')
         if person_id:
             try:
-                person = Person.objects.get(id=person_id)
+                person = person_queryset_for(request.user).get(id=person_id)
                 initial['person'] = person
             except Person.DoesNotExist:
                 pass
@@ -4307,7 +4314,7 @@ def reporte_persona_pdf(request, person_id):
     from io import BytesIO
     
     # Obtener la persona
-    person = get_object_or_404(Person, id=person_id)
+    person = get_object_or_404(person_queryset_for(request.user), id=person_id)
     
     # Crear el objeto de respuesta con el tipo MIME adecuado
     response = HttpResponse(content_type='application/pdf')
