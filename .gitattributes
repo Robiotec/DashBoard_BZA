@@ -1,0 +1,2 @@
+venv/lib/python3.14/site-packages/playwright/driver/node filter=lfs diff=lfs merge=lfs -text
+inventario_bonanza/db.sqlite3 filter=lfs diff=lfs merge=lfs -text

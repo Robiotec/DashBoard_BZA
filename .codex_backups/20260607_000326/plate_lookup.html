@@ -1,0 +1,180 @@
+{% extends "gestion_personal/base.html" %}
+{% load crispy_forms_tags %}
+
+{% block title %}Consulta de Placas{% endblock %}
+
+{% block extra_css %}
+{% if record.lookup_status == "pending" or record.lookup_status == "running" %}
+<meta http-equiv="refresh" content="4">
+{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <h1><i class="fas fa-car me-2"></i>Consulta de Placas</h1>
+  <a href="{% url 'dashboard_global_admin' %}" class="btn btn-secondary">
+    <i class="fas fa-arrow-left me-1"></i>Volver
+  </a>
+</div>
+
+<div class="card shadow-sm mb-4">
+  <div class="card-body">
+    <form method="post" class="row g-2 align-items-end">
+      {% csrf_token %}
+      <div class="col-md-9">
+        {{ form.placa|as_crispy_field }}
+      </div>
+      <div class="col-md-3 d-grid">
+        <button type="submit" class="btn btn-primary btn-lg">
+          <i class="fas fa-search me-1"></i>Consultar
+        </button>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if record %}
+<div class="card shadow-sm mb-4">
+  <div class="card-header bg-dark text-white d-flex justify-content-between align-items-center">
+    <h5 class="mb-0">{{ record.placa }}</h5>
+    <div class="d-flex gap-2 align-items-center">
+      {% if record.lookup_status == "completed" %}
+        <span class="badge bg-success">Completada</span>
+      {% elif record.lookup_status == "completed_with_errors" %}
+        <span class="badge bg-warning text-dark">Completada con errores</span>
+      {% elif record.lookup_status == "failed" %}
+        <span class="badge bg-danger">Fallida</span>
+      {% elif record.lookup_status == "running" %}
+        <span class="badge bg-info text-dark">Consultando</span>
+      {% else %}
+        <span class="badge bg-secondary">Pendiente</span>
+      {% endif %}
+      <span class="badge bg-light text-dark">{{ record.updated_at|date:"d/m/Y H:i" }}</span>
+    </div>
+  </div>
+  <div class="card-body">
+    {% if record.lookup_status == "pending" or record.lookup_status == "running" %}
+    <div class="alert alert-info mb-0">
+      <div class="d-flex align-items-center">
+        <div class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></div>
+        Consultando fuentes externas. Esta pantalla se actualizará automáticamente.
+      </div>
+    </div>
+    {% elif record.lookup_status == "failed" %}
+    <div class="alert alert-danger mb-0">
+      {{ record.last_error|default:"La consulta falló. Intente nuevamente." }}
+    </div>
+    {% else %}
+    {% if record.placa_aliases %}
+    <div class="mb-3">
+      <strong>Variantes consultadas:</strong>
+      {% for alias in record.placa_aliases %}
+        <span class="badge bg-secondary">{{ alias }}</span>
+      {% endfor %}
+    </div>
+    {% endif %}
+    <div class="row g-3">
+      <div class="col-md-4"><strong>Propietario:</strong><br>{{ record.propietario|default:"---" }}</div>
+      <div class="col-md-4"><strong>Marca:</strong><br>{{ record.marca|default:"---" }}</div>
+      <div class="col-md-4"><strong>Modelo:</strong><br>{{ record.modelo|default:"---" }}</div>
+      <div class="col-md-3"><strong>Año:</strong><br>{{ record.anio|default:"---" }}</div>
+      <div class="col-md-3"><strong>Clase:</strong><br>{{ record.clase|default:"---" }}</div>
+      <div class="col-md-3"><strong>Servicio:</strong><br>{{ record.servicio|default:"---" }}</div>
+      <div class="col-md-3"><strong>Estado:</strong><br>{{ record.estado|default:"---" }}</div>
+      <div class="col-md-4"><strong>VIN:</strong><br>{{ record.vin|default:"---" }}</div>
+      <div class="col-md-4"><strong>Motor:</strong><br>{{ record.motor|default:"---" }}</div>
+      <div class="col-md-4"><strong>Placa anterior:</strong><br>{{ record.placa_anterior|default:"---" }}</div>
+      <div class="col-md-3"><strong>Color 1:</strong><br>{{ record.color_1|default:"---" }}</div>
+      <div class="col-md-3"><strong>Color 2:</strong><br>{{ record.color_2|default:"---" }}</div>
+      <div class="col-md-3"><strong>Carrocería:</strong><br>{{ record.carroceria|default:"---" }}</div>
+      <div class="col-md-3"><strong>Cilindraje:</strong><br>{{ record.cilindraje|default:"---" }}</div>
+      <div class="col-md-4"><strong>Matrícula:</strong><br>{{ record.fecha_matricula|default:"---" }}</div>
+      <div class="col-md-4"><strong>Vencimiento:</strong><br>{{ record.vencimiento_matricula|default:"---" }}</div>
+      <div class="col-md-4"><strong>Último pago:</strong><br>{{ record.ultimo_pago|default:"---" }}</div>
+    </div>
+
+    {% if record.tramites %}
+    <hr>
+    <h6>Trámites</h6>
+    <div class="table-responsive">
+      <table class="table table-sm table-striped">
+        <thead>
+          <tr>
+            <th>Número</th>
+            <th>Descripción</th>
+            <th>Fecha</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for tramite in record.tramites %}
+          <tr>
+            <td>{{ tramite.numero }}</td>
+            <td>{{ tramite.descripcion }}</td>
+            <td>{{ tramite.fecha }}</td>
+            <td>{{ tramite.estado }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% endif %}
+
+    {% if record.source_errors %}
+    <hr>
+    <h6>Fuentes con error</h6>
+    {% for source, error in record.source_errors.items %}
+      <span class="badge bg-warning text-dark me-1">{{ source }}: {{ error }}</span>
+    {% endfor %}
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<div class="card shadow-sm">
+  <div class="card-header bg-dark text-white">
+    <h5 class="mb-0"><i class="fas fa-history me-2"></i>Consultas recientes</h5>
+  </div>
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>Variantes</th>
+            <th>Propietario</th>
+            <th>Marca</th>
+            <th>Modelo</th>
+            <th>Estado</th>
+            <th>Actualización</th>
+            <th>Usuario</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in recientes %}
+          <tr>
+            <td>{{ item.placa }}</td>
+            <td>
+              {% for alias in item.placa_aliases %}
+                <span class="badge bg-secondary">{{ alias }}</span>
+              {% empty %}
+                ---
+              {% endfor %}
+            </td>
+            <td>{{ item.propietario|default:"---" }}</td>
+            <td>{{ item.marca|default:"---" }}</td>
+            <td>{{ item.modelo|default:"---" }}</td>
+            <td>{{ item.get_lookup_status_display }}</td>
+            <td>{{ item.updated_at|date:"d/m/Y H:i" }}</td>
+            <td>{{ item.consultado_por.username|default:"---" }}</td>
+          </tr>
+          {% empty %}
+          <tr><td colspan="8" class="text-center">No hay consultas guardadas.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+{% endblock %}
