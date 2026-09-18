@@ -23,6 +23,7 @@ Dashboard Django para gestion de personal, accesos, visitantes, vehiculos y cons
 - `inventario_bonanza/staticfiles/`: salida local de `collectstatic`, no versionada
 - `consulta_people/`: fuentes de consulta para personas
 - `consulta_plates/`: fuentes de consulta para placas
+- `deploy/`: configuracion versionada de Nginx, SSH y Fail2ban
 
 ## Diseño del código
 
@@ -50,10 +51,14 @@ Servicios del sistema:
 
 - `bonanza-gunicorn.service`
 - `nginx.service`
+- `minio.service`
+- `ssh.service`
+- `fail2ban.service`
 
 Ruta de la configuracion de sitio:
 
 - `/etc/nginx/sites-available/bonanza`
+- `/etc/nginx/sites-available/bonanza-minio-s3`
 
 Certificado SSL:
 
@@ -119,6 +124,7 @@ systemctl restart nginx
 
 - `PLATE_LOOKUP_API_TOKEN`
 - `PERSON_LOOKUP_API_TOKEN`
+- `FACE_GALLERY_API_TOKEN`
 
 ### Telegram
 
@@ -160,7 +166,7 @@ GET /api/plate-lookup/<placa>/
 
 ### Autenticacion
 
-Si `PLATE_LOOKUP_API_TOKEN` tiene valor, se debe enviar:
+Se debe configurar `PLATE_LOOKUP_API_TOKEN` y enviar:
 
 ```text
 X-Plate-Lookup-Token: <token>
@@ -214,7 +220,7 @@ GET /api/person-lookup/<cedula>/
 
 ### Autenticacion
 
-Si `PERSON_LOOKUP_API_TOKEN` tiene valor, se debe enviar:
+Se debe configurar `PERSON_LOOKUP_API_TOKEN` y enviar:
 
 ```text
 X-Person-Lookup-Token: <token>
@@ -278,9 +284,28 @@ GET /server/api/
 
 ## MinIO y archivos
 
-- Las fotos y archivos privados se sirven a traves de MinIO
-- La ruta de media privada usa `private_media`
+- MinIO escucha solo en `127.0.0.1:9000` y `127.0.0.1:9001`.
+- El bucket no concede lectura anonima. La ruta `/media-minio/` pasa por Django y exige sesion y acceso a la organizacion del archivo.
+- El puerto 9443 expone la API S3 para el sincronizador autorizado, restringida en UFW a `207.246.68.223`. Actualizar la regla si cambia la IP del cliente.
 - `collectstatic` publica el contenido de `inventario_bonanza/static/`
+
+## Seguridad del servidor
+
+- UFW permite 80/tcp y 443/tcp para la web, limita 22/tcp para SSH y permite 9443/tcp solo desde `207.246.68.223`. Los demas puertos entrantes estan denegados.
+- SSH no permite acceso directo de `root`; `robiotec` conserva acceso con contrasena y permisos `sudo` mientras se valida el acceso por clave. `MaxAuthTries=3` y `LoginGraceTime=30` reducen intentos por conexion.
+- Fail2ban supervisa `sshd` con journal de systemd; tras cinco fallos en diez minutos aplica un bloqueo UFW de una hora.
+- Las configuraciones de SSH y Fail2ban activas tienen copia en `deploy/security/`. La configuracion de la web esta en `deploy/nginx/bonanza.conf`; Certbot administra los certificados en `/etc/letsencrypt/`.
+- No borrar `.env`, `inventario_bonanza/db.sqlite3`, `MinIO/`, `venv/`, `staticfiles/` ni `logs/` durante una limpieza: son datos o componentes de ejecucion. No se versionan.
+
+Comprobaciones:
+
+```bash
+sshd -t && sshd -T | grep -E 'permitrootlogin|passwordauthentication|maxauthtries'
+ufw status verbose
+fail2ban-client status sshd
+nginx -t
+systemctl is-active ssh fail2ban nginx bonanza-gunicorn minio
+```
 
 ## Branding
 
@@ -295,6 +320,8 @@ GET /server/api/
 - Revisar si se desea cambiar SQLite por PostgreSQL para produccion
 - Confirmar si MinIO sera local definitivo o migrado a otro almacenamiento
 - Definir si los tokens de API se consumiran solo internamente o desde sistemas externos
+- Validar inicio de sesion por clave de `robiotec` antes de desactivar `PasswordAuthentication`.
+- Rotar `DJANGO_SECRET_KEY` por una clave larga; el cambio cerrara las sesiones actuales.
 
 ## Comandos utiles
 

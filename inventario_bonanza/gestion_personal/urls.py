@@ -10,6 +10,7 @@ urlpatterns = [
     path('media-minio/<path:path>', views.private_media, name='private_media'),
     path('api/plate-lookup/<str:placa>/', views.api_plate_lookup, name='api_plate_lookup'),
     path('api/person-lookup/<str:cedula>/', views.api_person_lookup, name='api_person_lookup'),
+    path('api/face-gallery/people/', views.api_face_gallery_people, name='api_face_gallery_people'),
     path('server/', views.server_status_page, name='server_status_page'),
     path('server/api/', views.server_status_api, name='server_status_api'),
 

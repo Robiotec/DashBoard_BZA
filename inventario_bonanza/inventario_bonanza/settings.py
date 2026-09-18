@@ -43,6 +43,8 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_BROWSER_XSS_FILTER = True
 X_FRAME_OPTIONS = "DENY"
+SECURE_HSTS_SECONDS = 86400 if not DEBUG else 0
+SECURE_HSTS_INCLUDE_SUBDOMAINS = False
 
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
@@ -60,6 +62,7 @@ TELEGRAM_CHAT_IDS = [
 ]
 PLATE_LOOKUP_API_TOKEN = os.environ.get('PLATE_LOOKUP_API_TOKEN', '')
 PERSON_LOOKUP_API_TOKEN = os.environ.get('PERSON_LOOKUP_API_TOKEN', '')
+FACE_GALLERY_API_TOKEN = os.environ.get('FACE_GALLERY_API_TOKEN', '')
 
 AUTH_USER_MODEL = 'gestion_personal.CustomUser'
 LOGIN_URL = 'login'

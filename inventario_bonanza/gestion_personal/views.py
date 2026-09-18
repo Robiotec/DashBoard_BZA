@@ -470,15 +470,23 @@ def build_monthly_workday_rows(people, days, existing_records, vacation_days, pe
 
 @login_required
 def private_media(request, path):
-    if not default_storage.exists(path):
+    if request.method != 'GET':
+        return HttpResponse(status=405)
+
+    allowed_people = person_queryset_for(request.user)
+    if path.startswith('personas/'):
+        allowed = allowed_people.filter(foto=path).exists()
+    elif path.startswith('renuncias/'):
+        allowed = request.user.user_type in ('rh', 'global_admin') and allowed_people.filter(renuncia_pdf=path).exists()
+    else:
+        allowed = False
+    if not allowed or not default_storage.exists(path):
         return HttpResponse(status=404)
 
     content_type, _ = mimetypes.guess_type(path)
-    response = HttpResponse(
-        default_storage.open(path, 'rb').read(),
-        content_type=content_type or 'application/octet-stream',
-    )
-    response['Cache-Control'] = 'private, max-age=300'
+    response = FileResponse(default_storage.open(path, 'rb'), content_type=content_type or 'application/octet-stream')
+    response['Cache-Control'] = 'private, no-store'
+    response['X-Content-Type-Options'] = 'nosniff'
     return response
 
 #Redireccionamiento por Rol
@@ -1026,7 +1034,7 @@ def _plate_lookup_api_payload(record):
 
 def api_plate_lookup(request, placa):
     token = getattr(settings, "PLATE_LOOKUP_API_TOKEN", "")
-    if token and not hmac.compare_digest(request.headers.get("X-Plate-Lookup-Token", ""), token):
+    if not token or not hmac.compare_digest(request.headers.get("X-Plate-Lookup-Token", ""), token):
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
 
     normalized = normalize_plate(placa)
@@ -1072,9 +1080,29 @@ def _person_lookup_api_payload(record):
     }
 
 
+def api_face_gallery_people(request):
+    """Authenticated metadata feed consumed by the face-gallery synchronizer."""
+    token = getattr(settings, "FACE_GALLERY_API_TOKEN", "")
+    if not token or not hmac.compare_digest(request.headers.get("X-Face-Gallery-Token", ""), token):
+        return JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
+
+    people = {}
+    for person in Person.objects.all().values("id_number", "first_name", "last_name", "estado"):
+        cedula = str(person.get("id_number") or "").strip()
+        if not cedula:
+            continue
+        people[cedula] = {
+            "first_name": str(person.get("first_name") or "").strip(),
+            "last_name": str(person.get("last_name") or "").strip(),
+            "estado": str(person.get("estado") or "").strip(),
+        }
+
+    return JsonResponse({"ok": True, "people": people, "count": len(people)})
+
+
 def api_person_lookup(request, cedula):
     token = getattr(settings, "PERSON_LOOKUP_API_TOKEN", "")
-    if token and not hmac.compare_digest(request.headers.get("X-Person-Lookup-Token", ""), token):
+    if not token or not hmac.compare_digest(request.headers.get("X-Person-Lookup-Token", ""), token):
         return JsonResponse({"ok": False, "error": "unauthorized"}, status=401)
 
     normalized = normalize_cedula(cedula)

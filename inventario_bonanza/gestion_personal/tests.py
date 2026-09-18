@@ -9,6 +9,7 @@ import pandas as pd
 from django.core.management import call_command
 from django.utils import timezone
 from django.db import connection
+from django.core.files.base import ContentFile
 
 from .forms import PermisoSalidaForm, RoomAssignmentForm, VacationRecordForm
 from .models import (
@@ -21,6 +22,44 @@ from .services.hr_analytics import management_dashboard_context
 from .services.people_import import import_people_dataframe
 from .services.detailed_people import search_detailed_people
 from .services.workdays import save_monthly_workdays
+
+
+@override_settings(SECURE_SSL_REDIRECT=False)
+class PrivateMediaSecurityTests(TestCase):
+    def setUp(self):
+        self.first_org = Organization.objects.create(name='Primera', slug='primera')
+        self.second_org = Organization.objects.create(name='Segunda', slug='segunda')
+        self.user = CustomUser.objects.create_user(
+            username='media-user', password='test-password', user_type='rh', organization=self.first_org
+        )
+        self.person = Person.objects.create(
+            first_name='Ana', last_name='Perez', id_number='0102030405',
+            birth_date=date(1990, 1, 1), gender='F', organization=self.first_org,
+            foto='personas/activos/0102030405.png',
+        )
+        self.other_person = Person.objects.create(
+            first_name='Luis', last_name='Vera', id_number='1111111111',
+            birth_date=date(1990, 1, 1), gender='M', organization=self.second_org,
+            foto='personas/activos/1111111111.png',
+        )
+
+    @patch('gestion_personal.views.default_storage')
+    def test_media_requires_session_and_organization_scope(self, storage):
+        storage.exists.return_value = True
+        storage.open.return_value = ContentFile(b'image')
+        own_url = reverse('private_media', args=[self.person.foto.name])
+        other_url = reverse('private_media', args=[self.other_person.foto.name])
+
+        self.assertEqual(self.client.get(own_url).status_code, 302)
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(own_url).status_code, 200)
+        self.assertEqual(self.client.get(other_url).status_code, 404)
+        self.assertEqual(self.client.get(reverse('private_media', args=['unlisted/file.pdf'])).status_code, 404)
+
+    @override_settings(PLATE_LOOKUP_API_TOKEN='', PERSON_LOOKUP_API_TOKEN='')
+    def test_lookup_apis_fail_closed_without_configured_tokens(self):
+        self.assertEqual(self.client.get(reverse('api_plate_lookup', args=['ABC1234'])).status_code, 401)
+        self.assertEqual(self.client.get(reverse('api_person_lookup', args=['0102030405'])).status_code, 401)
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
