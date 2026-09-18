@@ -291,8 +291,9 @@ GET /server/api/
 
 ## Seguridad del servidor
 
-- UFW permite 80/tcp y 443/tcp para la web, limita 22/tcp para SSH y permite 9443/tcp solo desde `207.246.68.223`. Los demas puertos entrantes estan denegados.
-- SSH no permite acceso directo de `root`; `robiotec` conserva acceso con contrasena y permisos `sudo` mientras se valida el acceso por clave. `MaxAuthTries=3` y `LoginGraceTime=30` reducen intentos por conexion.
+- UFW permite 80/tcp y 443/tcp para la web, limita 22/tcp solo desde `10.0.0.2` por `wg0` y permite 9443/tcp solo desde `207.246.68.223`. Los demas puertos entrantes estan denegados.
+- SSH admite unicamente al usuario `robiotec` con clave publica. El acceso por contrasena y el acceso directo de `root` estan desactivados. La unica clave autorizada vive en `/home/robiotec/.ssh/authorized_keys` (huella `SHA256:2Vm+QulZq93o5nv3ZzfJ5ynf+IF/s7E7FAS9iWdmI38`). No se versiona la clave.
+- Para conectar, activar primero la VPN WireGuard y usar `ssh robiotec@10.0.0.3` desde el cliente `10.0.0.2`. `MaxAuthTries=3` y `LoginGraceTime=30` reducen intentos por conexion.
 - Fail2ban supervisa `sshd` con journal de systemd; tras cinco fallos en diez minutos aplica un bloqueo UFW de una hora.
 - Las configuraciones de SSH y Fail2ban activas tienen copia en `deploy/security/`. La configuracion de la web esta en `deploy/nginx/bonanza.conf`; Certbot administra los certificados en `/etc/letsencrypt/`.
 - No borrar `.env`, `inventario_bonanza/db.sqlite3`, `MinIO/`, `venv/`, `staticfiles/` ni `logs/` durante una limpieza: son datos o componentes de ejecucion. No se versionan.
@@ -301,6 +302,7 @@ Comprobaciones:
 
 ```bash
 sshd -t && sshd -T | grep -E 'permitrootlogin|passwordauthentication|maxauthtries'
+wg show wg0
 ufw status verbose
 fail2ban-client status sshd
 nginx -t
@@ -320,7 +322,6 @@ systemctl is-active ssh fail2ban nginx bonanza-gunicorn minio
 - Revisar si se desea cambiar SQLite por PostgreSQL para produccion
 - Confirmar si MinIO sera local definitivo o migrado a otro almacenamiento
 - Definir si los tokens de API se consumiran solo internamente o desde sistemas externos
-- Validar inicio de sesion por clave de `robiotec` antes de desactivar `PasswordAuthentication`.
 - Rotar `DJANGO_SECRET_KEY` por una clave larga; el cambio cerrara las sesiones actuales.
 
 ## Comandos utiles
