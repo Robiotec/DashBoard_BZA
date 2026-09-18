@@ -291,11 +291,12 @@ GET /server/api/
 
 ## Seguridad del servidor
 
-- UFW permite 80/tcp y 443/tcp para la web, limita 22/tcp solo desde `10.0.0.2` por `wg0` y permite 9443/tcp solo desde `207.246.68.223`. Los demas puertos entrantes estan denegados.
-- SSH admite unicamente al usuario `robiotec` con clave publica. El acceso por contrasena y el acceso directo de `root` estan desactivados. La unica clave autorizada vive en `/home/robiotec/.ssh/authorized_keys` (huella `SHA256:2Vm+QulZq93o5nv3ZzfJ5ynf+IF/s7E7FAS9iWdmI38`). No se versiona la clave.
-- Para conectar, activar primero la VPN WireGuard y usar `ssh robiotec@10.0.0.3` desde el cliente `10.0.0.2`. `MaxAuthTries=3` y `LoginGraceTime=30` reducen intentos por conexion.
+- UFW permite 80/tcp y 443/tcp para la web, limita 22/tcp publico y 22/tcp por `wg0` desde `10.0.0.0/24`, y permite 9443/tcp solo desde `207.246.68.223`. Los demas puertos entrantes estan denegados.
+- SSH admite unicamente al usuario `robiotec` y nunca a `root`. Hacia la IP publica `216.128.158.136` solo acepta la clave `robiotec-2026` (huella `SHA256:2Vm+QulZq93o5nv3ZzfJ5ynf+IF/s7E7FAS9iWdmI38`); no ofrece contrasena.
+- Hacia `10.0.0.3` por WireGuard, el equipo puede entrar con la contrasena de `robiotec` o con su clave anterior (huella `SHA256:zem4qlWS/6JotIMixFgGoumAoJVqH8NoBwvI+cZZpi4`). Las claves autorizadas se guardan en archivos separados bajo `/home/robiotec/.ssh/` y no se versionan.
+- Con VPN: `ssh robiotec@10.0.0.3`. Sin VPN: `ssh robiotec@216.128.158.136` usando la clave privada correspondiente a `robiotec-2026`. `MaxAuthTries=3` y `LoginGraceTime=30` reducen intentos por conexion.
 - Fail2ban supervisa `sshd` con journal de systemd; tras cinco fallos en diez minutos aplica un bloqueo UFW de una hora.
-- Las configuraciones de SSH y Fail2ban activas tienen copia en `deploy/security/`. La configuracion de la web esta en `deploy/nginx/bonanza.conf`; Certbot administra los certificados en `/etc/letsencrypt/`.
+- Las configuraciones de SSH y Fail2ban activas tienen copia en `deploy/security/`. El bloque `deploy/security/sshd-vpn-match.conf` se coloca al final de `/etc/ssh/sshd_config`, despues de los ajustes globales. La configuracion de la web esta en `deploy/nginx/bonanza.conf`; Certbot administra los certificados en `/etc/letsencrypt/`.
 - No borrar `.env`, `inventario_bonanza/db.sqlite3`, `MinIO/`, `venv/`, `staticfiles/` ni `logs/` durante una limpieza: son datos o componentes de ejecucion. No se versionan.
 
 Comprobaciones:
